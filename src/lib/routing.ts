@@ -40,7 +40,7 @@ export async function getRoutesOSRM(origin: LatLng, destination: LatLng, opt: Ro
   const data = await res.json();
   if (data.code !== 'Ok' || !data.routes) throw new Error('Routing response invalid');
 
-  return data.routes.map((r: any, idx: number) => ({
+  return data.routes.map((r: OSRMRoute, idx: number) => ({
     name: r.legs?.[0]?.summary ? String(r.legs[0].summary) : `Rute ${idx + 1}`,
     distanceMeters: r.distance,
     durationSeconds: r.duration,
@@ -49,13 +49,38 @@ export async function getRoutesOSRM(origin: LatLng, destination: LatLng, opt: Ro
   }));
 }
 
-function extractSteps(route: any): RouteStep[] {
+interface OSRMManeuver {
+  type?: string;
+  modifier?: string;
+  location?: [number, number];
+}
+
+interface OSRMStep {
+  distance?: number;
+  duration?: number;
+  name?: string;
+  maneuver?: OSRMManeuver;
+}
+
+interface OSRMLeg {
+  summary?: string;
+  steps?: OSRMStep[];
+}
+
+interface OSRMRoute {
+  distance: number;
+  duration: number;
+  geometry: { coordinates: [number, number][] };
+  legs?: OSRMLeg[];
+}
+
+function extractSteps(route: OSRMRoute): RouteStep[] {
   const steps: RouteStep[] = [];
   if (!route?.legs) return steps;
   for (const leg of route.legs) {
     if (!leg?.steps) continue;
     for (const st of leg.steps) {
-      const m = st.maneuver ?? {};
+      const m: OSRMManeuver = st.maneuver ?? {};
       const type: string = m.type ?? 'continue';
       const modifier: string | undefined = m.modifier;
       const name: string = st.name || '';

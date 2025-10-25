@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MapPin, Navigation, Car, Bike, Clock, TrendingUp, AlertTriangle, CornerDownLeft, CornerDownRight, Flag, MoveRight, GitMerge, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
-import { MapContainer, TileLayer, Polyline, CircleMarker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { geocode, reverseGeocode } from '@/lib/geocoding';
 import { track } from '@/lib/analytics';
@@ -13,10 +13,15 @@ import { getRoutesOSRM } from '@/lib/routing';
 import { useQuery } from '@tanstack/react-query';
 import { useDebounce } from '@/hooks/use-debounce';
 
-const MapContainerAny = MapContainer as any;
-const TileLayerAny = TileLayer as any;
-const PolylineAny = Polyline as any;
-const CircleMarkerAny = CircleMarker as any;
+function CircleDot({ center, radius, options }: { center: [number, number]; radius: number; options: L.PathOptions }) {
+  const map = useMap();
+  useEffect(() => {
+    const m = L.circleMarker(L.latLng(center[0], center[1]), { ...options, radius });
+    m.addTo(map);
+    return () => { try { m.remove(); } catch { void 0; } };
+  }, [map, center, radius, options]);
+  return null;
+}
 
 function FitBounds({ geometries, originCoord, destinationCoord, selectedIndex }: { geometries: [number, number][][]; originCoord: [number, number] | null; destinationCoord: [number, number] | null; selectedIndex: number | null }) {
   const map = useMap();
@@ -42,8 +47,8 @@ function FollowMarker({ coord, follow }: { coord: [number, number] | null; follo
     if (!coord || !follow) return;
     map.panTo(L.latLng(coord[0], coord[1]));
   }, [coord, follow, map]);
-  if (!coord) return null as any;
-  return <CircleMarkerAny center={coord} radius={8} pathOptions={{ color: '#22c55e' }} />;
+  if (!coord) return null;
+  return <CircleDot center={coord} radius={8} options={{ color: '#22c55e' }} />;
 }
 
 function ZoomController({ zoom }: { zoom: number }) {
@@ -54,18 +59,18 @@ function ZoomController({ zoom }: { zoom: number }) {
   return null;
 }
 
-function InvalidateSize({ deps }: { deps: any[] }) {
+function InvalidateSize({ deps }: { deps: unknown[] }) {
   const map = useMap();
   useEffect(() => {
     const t = setTimeout(() => {
-      try { map.invalidateSize(); } catch {}
+      try { map.invalidateSize(); } catch { void 0; }
     }, 120);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   useEffect(() => {
     const onResize = () => {
-      try { map.invalidateSize(); } catch {}
+      try { map.invalidateSize(); } catch { void 0; }
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -118,7 +123,8 @@ const RoutePlanner = () => {
   const [followMap, setFollowMap] = useState(true);
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [fullMap, setFullMap] = useState(false);
-  const [tileTheme, setTileTheme] = useState<'light' | 'dark'>('dark');
+  const [tileTheme, setTileTheme] = useState<'light' | 'dark'>('light');
+  const [showAlternatives, setShowAlternatives] = useState(true);
 
   // Cost settings
   const [fuelPrice, setFuelPrice] = useState<number>(14000); // IDR per liter
@@ -144,8 +150,8 @@ const RoutePlanner = () => {
       return raw ? (JSON.parse(raw) as Place[]) : [];
     } catch { return []; }
   });
-  useEffect(() => { try { localStorage.setItem('vt_favorites', JSON.stringify(favorites)); } catch {} }, [favorites]);
-  useEffect(() => { try { localStorage.setItem('vt_history', JSON.stringify(history.slice(0, 10))); } catch {} }, [history]);
+  useEffect(() => { try { localStorage.setItem('vt_favorites', JSON.stringify(favorites)); } catch { void 0; } }, [favorites]);
+  useEffect(() => { try { localStorage.setItem('vt_history', JSON.stringify(history.slice(0, 10))); } catch { void 0; } }, [history]);
   function pushHistory(p: Place) {
     setHistory((h) => [p, ...h.filter((x) => x.label !== p.label)].slice(0, 10));
   }
@@ -175,14 +181,20 @@ const RoutePlanner = () => {
         if (p.fuelType === 'pertalite' || p.fuelType === 'pertamax' || p.fuelType === 'diesel') setFuelType(p.fuelType);
         if (p.tileTheme === 'light' || p.tileTheme === 'dark') setTileTheme(p.tileTheme);
       }
-    } catch {}
+    } catch { void 0; }
   }, []);
   useEffect(() => {
     try {
       const payload = { fuelPrice, efficiencyCar, efficiencyMoto, tollRatePerKm, useToll, paymentMethod, fuelType, tileTheme };
       localStorage.setItem('vt_prefs', JSON.stringify(payload));
-    } catch {}
+    } catch { void 0; }
   }, [fuelPrice, efficiencyCar, efficiencyMoto, tollRatePerKm, useToll, paymentMethod, fuelType, tileTheme]);
+
+  useEffect(() => {
+    const onToggle = (_e: Event) => setTileTheme((t) => (t === 'light' ? 'dark' : 'light'));
+    window.addEventListener('vt_toggle_map_theme', onToggle);
+    return () => window.removeEventListener('vt_toggle_map_theme', onToggle);
+  }, []);
 
   // Sync fuelPrice with fuelType defaults (user can still override)
   useEffect(() => {
@@ -201,9 +213,9 @@ const RoutePlanner = () => {
       try {
         const rev = await reverseGeocode(lat, lon);
         if (rev) setOrigin(rev.displayName);
-      } catch {}
+      } catch { void 0; }
     });
-  }, []);
+  }, [origin]);
 
   const currency = useMemo(() => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }), []);
 
@@ -226,13 +238,13 @@ const RoutePlanner = () => {
   const originDebounced = useDebounce(originInput, 300);
   const destinationDebounced = useDebounce(destinationInput, 300);
 
-  const { data: originSuggestions = [], isFetching: originFetching } = useQuery({
+  const { data: originSuggestions = [] } = useQuery({
     queryKey: ['geocode', originDebounced],
     queryFn: () => geocode(originDebounced),
     enabled: originDebounced.length >= 3,
     staleTime: 60_000,
   });
-  const { data: destinationSuggestions = [], isFetching: destinationFetching } = useQuery({
+  const { data: destinationSuggestions = [] } = useQuery({
     queryKey: ['geocode', destinationDebounced],
     queryFn: () => geocode(destinationDebounced),
     enabled: destinationDebounced.length >= 3,
@@ -303,8 +315,9 @@ const RoutePlanner = () => {
       setNavCoord(mappedGeoms[0]?.[0] ?? null);
       setNavPtr(0);
       toast.success('Rute berhasil dihitung!');
-    } catch (e: any) {
-      toast.error(e?.message || 'Terjadi kesalahan saat menghitung rute');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(msg || 'Terjadi kesalahan saat menghitung rute');
     } finally {
       setIsCalculating(false);
     }
@@ -326,7 +339,7 @@ const RoutePlanner = () => {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-10">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-primary glow-text-cyan uppercase tracking-wider mb-2">
             Route Planner
@@ -336,11 +349,11 @@ const RoutePlanner = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Input Form */}
           {!fullMap && (
           <div className="lg:col-span-1">
-            <Card className="p-6 border-glow bg-card space-y-6 sticky top-24">
+            <Card className="p-7 border-glow bg-card space-y-6 sticky top-24">
               <div>
                 <h3 className="text-xl font-bold text-primary mb-4 uppercase tracking-wider">
                   Rencana Perjalanan
@@ -574,8 +587,37 @@ const RoutePlanner = () => {
 
           {/* Routes Results */}
           <div className={fullMap ? "lg:col-span-3" : "lg:col-span-2"}>
-            <Card className="border-glow bg-card mb-4 overflow-hidden relative rounded-xl">
-              <div className={fullMap ? "h-[calc(100vh-160px)]" : "h-[560px]"}>
+            {routes.length > 0 && selectedRouteIndex != null && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                {(() => {
+                  const r = routes[selectedRouteIndex];
+                  const km = r.distanceMeters / 1000;
+                  const base = estimateCosts(km);
+                  return (
+                    <>
+                      <div className="p-5 rounded-lg border border-border bg-card">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Jarak</p>
+                        <p className="text-2xl font-bold text-foreground">{r.distance}</p>
+                      </div>
+                      <div className="p-5 rounded-lg border border-border bg-card">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Durasi</p>
+                        <p className="text-2xl font-bold text-foreground">{r.duration} mnt</p>
+                      </div>
+                      <div className="p-5 rounded-lg border border-border bg-card">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Kecepatan</p>
+                        <p className="text-2xl font-bold text-foreground">{r.avgSpeed} km/j</p>
+                      </div>
+                      <div className="p-5 rounded-lg border border-border bg-card">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Estimasi Biaya</p>
+                        <p className="text-2xl font-bold text-primary">{currency.format(Math.round(base.total))}</p>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+            <Card className="border-glow bg-card mb-6 overflow-hidden relative rounded-xl">
+              <div className={fullMap ? "h-[calc(100vh-160px)]" : "h-[580px]"}>
                 {/* Banner instruksi langkah berikutnya */}
                 {selectedRouteIndex != null && routeSteps[selectedRouteIndex] && routeSteps[selectedRouteIndex][currentStepIdx] && (
                   <div className="absolute z-10 m-2 px-2 py-1 rounded-md bg-black/50 text-foreground text-xs border border-border backdrop-blur">
@@ -587,7 +629,27 @@ const RoutePlanner = () => {
                 <div className="absolute right-2 top-2 z-10 px-2 py-1 rounded-md bg-black/50 text-foreground text-xs border border-border">
                   N
                 </div>
-                <MapContainerAny center={[-6.2, 106.816]} zoom={mapZoom} scrollWheelZoom zoomControl={false} attributionControl={false} className="h-full w-full">
+                {/* Legend */}
+                <div className="absolute left-2 top-2 z-10 rounded-md bg-white/90 text-foreground text-xs border border-border backdrop-blur px-2 py-2 shadow">
+                  <div className="font-semibold mb-1">Legenda</div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="inline-block w-4 h-2 rounded-sm" style={{ backgroundColor: '#1a73e8' }} />
+                    <span>Rute utama</span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="inline-block w-4 h-2 rounded-sm border border-muted-foreground" style={{ backgroundColor: '#9aa0a6' }} />
+                    <span>Alternatif</span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="inline-block w-3 h-3 rounded-full border-2" style={{ backgroundColor: '#22d3ee', borderColor: '#22d3ee' }} />
+                    <span>Asal</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-3 h-3 rounded-full border-2" style={{ backgroundColor: '#ef4444', borderColor: '#ef4444' }} />
+                    <span>Tujuan</span>
+                  </div>
+                </div>
+                <MapContainer center={[-6.2, 106.816]} zoom={mapZoom} scrollWheelZoom zoomControl={false} attributionControl={false} className="h-full w-full">
                   {/* Ensure tiles reflow when layout changes */}
                   <InvalidateSize deps={[fullMap, selectedRouteIndex, mapZoom]} />
                   {/* Scale control */}
@@ -597,61 +659,68 @@ const RoutePlanner = () => {
                       useEffect(() => {
                         const control = L.control.scale({ metric: true, imperial: false, position: 'bottomleft' });
                         control.addTo(map);
-                        return () => { try { (control as any).remove(); } catch {} };
+                        return () => { try { control.remove(); } catch { void 0; } };
                       }, [map]);
                       return null;
                     }
                     return <AddScaleControl />;
                   })()}
                   {tileTheme === 'light' ? (
-                    <TileLayerAny
+                    <TileLayer
                       attribution='&copy; OpenStreetMap contributors'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                   ) : (
-                    <TileLayerAny
+                    <TileLayer
                       attribution='&copy; OpenStreetMap contributors, &copy; CARTO'
                       url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
                     />
                   )}
                   {originCoord && (
                     <>
-                      <CircleMarkerAny center={originCoord} radius={14} pathOptions={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.2, opacity: 0.2, weight: 0 }} />
-                      <CircleMarkerAny center={originCoord} radius={8} pathOptions={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.9, weight: 2 }} />
+                      <CircleDot center={originCoord} radius={14} options={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.2, opacity: 0.2, weight: 0 }} />
+                      {/* white outline ring */}
+                      <CircleDot center={originCoord} radius={10} options={{ color: '#ffffff', fillOpacity: 0, opacity: 1, weight: 2 }} />
+                      <CircleDot center={originCoord} radius={8} options={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.9, weight: 2 }} />
                     </>
                   )}
                   {destinationCoord && (
                     <>
-                      <CircleMarkerAny center={destinationCoord} radius={14} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.2, opacity: 0.2, weight: 0 }} />
-                      <CircleMarkerAny center={destinationCoord} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.9, weight: 2 }} />
+                      <CircleDot center={destinationCoord} radius={14} options={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.2, opacity: 0.2, weight: 0 }} />
+                      {/* white outline ring */}
+                      <CircleDot center={destinationCoord} radius={10} options={{ color: '#ffffff', fillOpacity: 0, opacity: 1, weight: 2 }} />
+                      <CircleDot center={destinationCoord} radius={8} options={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.9, weight: 2 }} />
                     </>
                   )}
-                  {/* Outline for selected route */}
-                  {selectedRouteIndex != null && geometries[selectedRouteIndex] && (
-                    <PolylineAny
-                      positions={geometries[selectedRouteIndex]}
-                      pathOptions={{ color: '#22d3ee', weight: 10, opacity: 0.25 }}
-                    />
-                  )}
-                  {geometries.map((geom, idx) => (
-                    <PolylineAny
-                      key={idx}
-                      positions={geom}
-                      pathOptions={{
-                        color: idx === (selectedRouteIndex ?? 0) ? '#22d3ee' : '#60a5fa',
-                        weight: idx === (selectedRouteIndex ?? 0) ? 6 : 3,
-                        opacity: idx === (selectedRouteIndex ?? 0) ? 1 : 0.5,
-                        dashArray: idx === (selectedRouteIndex ?? 0) ? undefined : '6 8',
-                        lineCap: 'round',
-                      }}
-                    />
+                  {/* Routes with white underlay and colored stroke */}
+                  {(showAlternatives ? geometries : (selectedRouteIndex != null && geometries[selectedRouteIndex] ? [geometries[selectedRouteIndex]] : [])).map((geom, idx) => (
+                    <>
+                      {/* underlay */}
+                      <Polyline
+                        key={`u-${selectedRouteIndex ?? 0}-${idx}`}
+                        positions={geom}
+                        pathOptions={{ color: '#ffffff', weight: (selectedRouteIndex ?? 0) === idx ? 10 : 8, opacity: 0.7, lineCap: 'round' }}
+                      />
+                      {/* main stroke */}
+                      <Polyline
+                        key={`m-${selectedRouteIndex ?? 0}-${idx}`}
+                        positions={geom}
+                        pathOptions={{
+                          color: ((selectedRouteIndex ?? 0) === idx) ? '#1a73e8' : '#9aa0a6',
+                          weight: ((selectedRouteIndex ?? 0) === idx) ? 6 : 4,
+                          opacity: ((selectedRouteIndex ?? 0) === idx) ? 1 : 0.9,
+                          dashArray: ((selectedRouteIndex ?? 0) === idx) ? undefined : '6 8',
+                          lineCap: 'round',
+                        }}
+                      />
+                    </>
                   ))}
                   <FitBounds geometries={geometries} originCoord={originCoord} destinationCoord={destinationCoord} selectedIndex={selectedRouteIndex} />
                   <FollowMarker coord={navCoord} follow={followMap} />
                   <ZoomController zoom={mapZoom} />
-                </MapContainerAny>
+                </MapContainer>
               </div>
-              <div className="flex items-center gap-2 p-3 border-t border-border">
+              <div className="flex items-center gap-3 p-4 border-t border-border">
                 <Button variant={fullMap ? 'default' : 'secondary'} onClick={() => { setFullMap((v) => !v); track('ui_fullscreen_toggle', { fullMap: !fullMap }); }}>
                   {fullMap ? 'Keluar Layar Penuh' : 'Peta Layar Penuh'}
                 </Button>
@@ -659,6 +728,9 @@ const RoutePlanner = () => {
                 <Button variant="secondary" onClick={() => setMapZoom((z) => Math.max(z - 1, 3))}>Zoom Out</Button>
                 <Button variant={tileTheme==='dark'?'default':'secondary'} onClick={()=>{ const next = tileTheme==='light'?'dark':'light'; setTileTheme(next); track('ui_tile_theme', { theme: next }); }}>
                   Tema: {tileTheme==='light'?'Terang':'Gelap'}
+                </Button>
+                <Button variant={showAlternatives ? 'default' : 'secondary'} onClick={() => setShowAlternatives((v) => !v)}>
+                  {showAlternatives ? 'Tampilkan Alternatif: ON' : 'Tampilkan Alternatif: OFF'}
                 </Button>
                 <Button variant="secondary" onClick={() => setNavCoord(originCoord || navCoord)}>Recenter</Button>
                 <Button variant={followMap ? 'default' : 'secondary'} onClick={() => { const nv = !followMap; setFollowMap(nv); track('ui_follow_toggle', { follow: nv }); }}>
@@ -816,7 +888,7 @@ const RoutePlanner = () => {
                           const geom = geometries[index] || [];
                           if (useToll && tollSegments.length && geom.length) {
                             const used = new Set<number>();
-                            for (let p of geom) {
+                            for (const p of geom) {
                               for (let si = 0; si < tollSegments.length; si++) {
                                 if (used.has(si)) continue;
                                 const s = tollSegments[si];
