@@ -14,13 +14,19 @@ const Header = () => {
         </div>
         
         <nav className="hidden md:flex items-center gap-6 text-sm">
-          <a href="#dashboard" className="text-foreground hover:text-primary transition-colors uppercase tracking-wide">
+          <a href="/" className="text-foreground hover:text-primary transition-colors uppercase tracking-wide">
             Dashboard
           </a>
-          <a href="#analytics" className="text-muted-foreground hover:text-primary transition-colors uppercase tracking-wide">
+          <a href="/route-planner" className="text-muted-foreground hover:text-primary transition-colors uppercase tracking-wide">
+            Route Planner
+          </a>
+          <a href="/analytics" className="text-muted-foreground hover:text-primary transition-colors uppercase tracking-wide">
             Analytics
           </a>
-          <a href="#about" className="text-muted-foreground hover:text-primary transition-colors uppercase tracking-wide">
+          <a href="/alerts" className="text-muted-foreground hover:text-primary transition-colors uppercase tracking-wide">
+            Alerts
+          </a>
+          <a href="/about" className="text-muted-foreground hover:text-primary transition-colors uppercase tracking-wide">
             About
           </a>
         </nav>
