@@ -1,0 +1,16 @@
+{
+  "segments": [
+    {
+      "name": "Jakarta Inner Ring Road (contoh)",
+      "bbox": { "minLat": -6.25, "minLon": 106.75, "maxLat": -6.15, "maxLon": 106.90 },
+      "cash": 15000,
+      "cashless": 15000
+    },
+    {
+      "name": "Tol Cipularang (contoh)",
+      "bbox": { "minLat": -6.90, "minLon": 107.30, "maxLat": -6.30, "maxLon": 107.70 },
+      "cash": 50000,
+      "cashless": 50000
+    }
+  ]
+}

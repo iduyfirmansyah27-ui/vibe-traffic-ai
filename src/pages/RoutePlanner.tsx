@@ -1,10 +1,88 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MapPin, Navigation, Car, Bike, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
+import { MapPin, Navigation, Car, Bike, Clock, TrendingUp, AlertTriangle, CornerDownLeft, CornerDownRight, Flag, MoveRight, GitMerge, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
+import { MapContainer, TileLayer, Polyline, CircleMarker, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import { geocode, reverseGeocode } from '@/lib/geocoding';
+import { track } from '@/lib/analytics';
+import { getRoutesOSRM } from '@/lib/routing';
+import { useQuery } from '@tanstack/react-query';
+import { useDebounce } from '@/hooks/use-debounce';
+
+const MapContainerAny = MapContainer as any;
+const TileLayerAny = TileLayer as any;
+const PolylineAny = Polyline as any;
+const CircleMarkerAny = CircleMarker as any;
+
+function FitBounds({ geometries, originCoord, destinationCoord, selectedIndex }: { geometries: [number, number][][]; originCoord: [number, number] | null; destinationCoord: [number, number] | null; selectedIndex: number | null }) {
+  const map = useMap();
+  useEffect(() => {
+    const points: [number, number][] = [];
+    if (originCoord) points.push(originCoord);
+    if (destinationCoord) points.push(destinationCoord);
+    const geoms = selectedIndex !== null && geometries[selectedIndex] ? [geometries[selectedIndex]] : geometries;
+    geoms.forEach((g) => {
+      g.forEach((p) => points.push(p));
+    });
+    if (points.length > 0) {
+      const bounds = L.latLngBounds(points.map(([lat, lng]) => L.latLng(lat, lng)));
+      map.fitBounds(bounds, { padding: [32, 32] });
+    }
+  }, [geometries, originCoord, destinationCoord, selectedIndex, map]);
+  return null;
+}
+
+function FollowMarker({ coord, follow }: { coord: [number, number] | null; follow: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!coord || !follow) return;
+    map.panTo(L.latLng(coord[0], coord[1]));
+  }, [coord, follow, map]);
+  if (!coord) return null as any;
+  return <CircleMarkerAny center={coord} radius={8} pathOptions={{ color: '#22c55e' }} />;
+}
+
+function ZoomController({ zoom }: { zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setZoom(zoom);
+  }, [zoom, map]);
+  return null;
+}
+
+function InvalidateSize({ deps }: { deps: any[] }) {
+  const map = useMap();
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try { map.invalidateSize(); } catch {}
+    }, 120);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  useEffect(() => {
+    const onResize = () => {
+      try { map.invalidateSize(); } catch {}
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [map]);
+  return null;
+}
+
+function getManeuverIcon(instr: string) {
+  const s = instr.toLowerCase();
+  if (s.includes('tiba')) return <Flag className="w-4 h-4 text-green-400" />;
+  if (s.includes('mulai')) return <MoveRight className="w-4 h-4 text-primary" />;
+  if (s.includes('bundaran')) return <RefreshCcw className="w-4 h-4 text-yellow-400" />;
+  if (s.includes('gabung')) return <GitMerge className="w-4 h-4 text-blue-400" />;
+  if (s.includes('kiri')) return <CornerDownLeft className="w-4 h-4 text-foreground" />;
+  if (s.includes('kanan')) return <CornerDownRight className="w-4 h-4 text-foreground" />;
+  return <MoveRight className="w-4 h-4 text-muted-foreground" />;
+}
 
 type VehicleType = 'car' | 'motorcycle';
 
@@ -12,6 +90,7 @@ interface RouteResult {
   id: number;
   name: string;
   distance: string;
+  distanceMeters: number;
   duration: number;
   congestion: number;
   toll: boolean;
@@ -25,55 +104,210 @@ const RoutePlanner = () => {
   const [vehicleType, setVehicleType] = useState<VehicleType>('car');
   const [routes, setRoutes] = useState<RouteResult[]>([]);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [originCoord, setOriginCoord] = useState<[number, number] | null>(null);
+  const [destinationCoord, setDestinationCoord] = useState<[number, number] | null>(null);
+  const [geometries, setGeometries] = useState<[number, number][][]>([]);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(null);
+  const [routeSteps, setRouteSteps] = useState<{ instruction: string; distanceMeters: number; durationSeconds: number; location: [number, number] }[][]>([]);
+  const [navRunning, setNavRunning] = useState(false);
+  const [navCoord, setNavCoord] = useState<[number, number] | null>(null);
+  const [navPtr, setNavPtr] = useState(0);
+  const [navSpeed, setNavSpeed] = useState(2); // points per tick
+  const [navTickMs, setNavTickMs] = useState(300);
+  const [mapZoom, setMapZoom] = useState(12);
+  const [followMap, setFollowMap] = useState(true);
+  const [currentStepIdx, setCurrentStepIdx] = useState(0);
+  const [fullMap, setFullMap] = useState(false);
+  const [tileTheme, setTileTheme] = useState<'light' | 'dark'>('dark');
 
-  const calculateRoutes = () => {
+  // Cost settings
+  const [fuelPrice, setFuelPrice] = useState<number>(14000); // IDR per liter
+  const [fuelType, setFuelType] = useState<'pertalite' | 'pertamax' | 'diesel'>('pertalite');
+  const [efficiencyCar, setEfficiencyCar] = useState<number>(10); // km per liter
+  const [efficiencyMoto, setEfficiencyMoto] = useState<number>(30); // km per liter
+  const [tollRatePerKm, setTollRatePerKm] = useState<number>(1000); // IDR per km
+  const [useToll, setUseToll] = useState<boolean>(true);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'cashless'>('cashless');
+  const [cashlessFeeRate, setCashlessFeeRate] = useState<number>(0); // e.g., 0.01 for 1% fee if any
+
+  // Favorites & History (component level)
+  type Place = { label: string; lat: number; lon: number };
+  const [favorites, setFavorites] = useState<Place[]>(() => {
+    try {
+      const raw = localStorage.getItem('vt_favorites');
+      return raw ? (JSON.parse(raw) as Place[]) : [];
+    } catch { return []; }
+  });
+  const [history, setHistory] = useState<Place[]>(() => {
+    try {
+      const raw = localStorage.getItem('vt_history');
+      return raw ? (JSON.parse(raw) as Place[]) : [];
+    } catch { return []; }
+  });
+  useEffect(() => { try { localStorage.setItem('vt_favorites', JSON.stringify(favorites)); } catch {} }, [favorites]);
+  useEffect(() => { try { localStorage.setItem('vt_history', JSON.stringify(history.slice(0, 10))); } catch {} }, [history]);
+  function pushHistory(p: Place) {
+    setHistory((h) => [p, ...h.filter((x) => x.label !== p.label)].slice(0, 10));
+  }
+
+  // Toll dataset
+  type TollSegment = { name: string; bbox: { minLat: number; minLon: number; maxLat: number; maxLon: number }; cash: number; cashless: number };
+  const [tollSegments, setTollSegments] = useState<TollSegment[]>([]);
+  useEffect(() => {
+    fetch('/data/toll-segments.json')
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((j) => setTollSegments(j.segments || []))
+      .catch(() => setTollSegments([]));
+  }, []);
+
+  // Load/save preferences to localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('vt_prefs');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (typeof p.fuelPrice === 'number') setFuelPrice(p.fuelPrice);
+        if (typeof p.efficiencyCar === 'number') setEfficiencyCar(p.efficiencyCar);
+        if (typeof p.efficiencyMoto === 'number') setEfficiencyMoto(p.efficiencyMoto);
+        if (typeof p.tollRatePerKm === 'number') setTollRatePerKm(p.tollRatePerKm);
+        if (typeof p.useToll === 'boolean') setUseToll(p.useToll);
+        if (p.paymentMethod === 'cash' || p.paymentMethod === 'cashless') setPaymentMethod(p.paymentMethod);
+        if (p.fuelType === 'pertalite' || p.fuelType === 'pertamax' || p.fuelType === 'diesel') setFuelType(p.fuelType);
+        if (p.tileTheme === 'light' || p.tileTheme === 'dark') setTileTheme(p.tileTheme);
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      const payload = { fuelPrice, efficiencyCar, efficiencyMoto, tollRatePerKm, useToll, paymentMethod, fuelType, tileTheme };
+      localStorage.setItem('vt_prefs', JSON.stringify(payload));
+    } catch {}
+  }, [fuelPrice, efficiencyCar, efficiencyMoto, tollRatePerKm, useToll, paymentMethod, fuelType, tileTheme]);
+
+  // Sync fuelPrice with fuelType defaults (user can still override)
+  useEffect(() => {
+    const defaults: Record<typeof fuelType, number> = { pertalite: 10000, pertamax: 13500, diesel: 15000 };
+    setFuelPrice((prev) => (Math.abs(prev - defaults[fuelType]) < 1 ? prev : defaults[fuelType]));
+  }, [fuelType]);
+
+  // Default: set origin to user's location on mount if empty
+  useEffect(() => {
+    if (origin) return;
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      setOriginCoord([lat, lon]);
+      try {
+        const rev = await reverseGeocode(lat, lon);
+        if (rev) setOrigin(rev.displayName);
+      } catch {}
+    });
+  }, []);
+
+  const currency = useMemo(() => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }), []);
+
+  function estimateCosts(distanceKm: number) {
+    const eff = vehicleType === 'car' ? efficiencyCar : efficiencyMoto;
+    const fuelLiters = eff > 0 ? distanceKm / eff : 0;
+    const fuelCost = fuelLiters * fuelPrice;
+    const tollCost = useToll ? distanceKm * tollRatePerKm : 0;
+    const baseTotal = fuelCost + tollCost;
+    const methodFee = paymentMethod === 'cashless' ? baseTotal * cashlessFeeRate : 0;
+    const total = baseTotal + methodFee;
+    return { fuelCost, tollCost, total };
+  }
+
+  // Debounce helper
+  const [originInput, setOriginInput] = useState('');
+  const [destinationInput, setDestinationInput] = useState('');
+  useEffect(() => setOriginInput(origin), [origin]);
+  useEffect(() => setDestinationInput(destination), [destination]);
+  const originDebounced = useDebounce(originInput, 300);
+  const destinationDebounced = useDebounce(destinationInput, 300);
+
+  const { data: originSuggestions = [], isFetching: originFetching } = useQuery({
+    queryKey: ['geocode', originDebounced],
+    queryFn: () => geocode(originDebounced),
+    enabled: originDebounced.length >= 3,
+    staleTime: 60_000,
+  });
+  const { data: destinationSuggestions = [], isFetching: destinationFetching } = useQuery({
+    queryKey: ['geocode', destinationDebounced],
+    queryFn: () => geocode(destinationDebounced),
+    enabled: destinationDebounced.length >= 3,
+    staleTime: 60_000,
+  });
+
+  const calculateRoutes = async () => {
     if (!origin || !destination) {
       toast.error('Mohon isi kota asal dan tujuan');
       return;
     }
 
-    setIsCalculating(true);
-    toast.success('Menghitung rute terbaik...');
+    try {
+      setIsCalculating(true);
+      toast.success('Menghitung rute terbaik...');
+      track('calculate_route', { origin, destination });
 
-    // Simulate route calculation
-    setTimeout(() => {
-      const mockRoutes: RouteResult[] = [
-        {
-          id: 1,
-          name: 'Rute Tol Dalam Kota (Tercepat)',
-          distance: '24.5 km',
-          duration: vehicleType === 'motorcycle' ? 28 : 32,
-          congestion: 0.45,
-          toll: true,
-          avgSpeed: 45,
-          waypoints: ['Gatot Subroto', 'Semanggi', 'Kuningan']
-        },
-        {
-          id: 2,
-          name: 'Rute Sudirman (Ekonomis)',
-          distance: '26.8 km',
-          duration: vehicleType === 'motorcycle' ? 35 : 42,
-          congestion: 0.72,
-          toll: false,
-          avgSpeed: 38,
-          waypoints: ['Sudirman', 'Thamrin', 'Menteng']
-        },
-        {
-          id: 3,
-          name: 'Rute Alternatif Casablanca',
-          distance: '22.3 km',
-          duration: vehicleType === 'motorcycle' ? 30 : 38,
-          congestion: 0.58,
-          toll: false,
-          avgSpeed: 42,
-          waypoints: ['Casablanca', 'Rasuna Said', 'Satrio']
-        }
-      ];
+      const [og, ds] = await Promise.all([geocode(origin), geocode(destination)]);
+      if (!og.length || !ds.length) {
+        toast.error('Lokasi asal atau tujuan tidak ditemukan');
+        setIsCalculating(false);
+        return;
+      }
+      const og0 = og[0];
+      const ds0 = ds[0];
+      const ogCoord: [number, number] = [og0.lat, og0.lon];
+      const dsCoord: [number, number] = [ds0.lat, ds0.lon];
+      setOriginCoord(ogCoord);
+      setDestinationCoord(dsCoord);
 
-      setRoutes(mockRoutes);
-      setIsCalculating(false);
+      const profile = 'driving';
+      const results = await getRoutesOSRM({ lat: og0.lat, lon: og0.lon }, { lat: ds0.lat, lon: ds0.lon }, { profile, alternatives: true });
+
+      const mappedRoutes: RouteResult[] = results.map((r, idx) => {
+        const km = r.distanceMeters / 1000;
+        const hours = r.durationSeconds / 3600;
+        const speed = km / (hours || 1e-6);
+        let congestion = 0.3;
+        if (speed < 20) congestion = 0.8;
+        else if (speed < 30) congestion = 0.65;
+        else if (speed < 40) congestion = 0.5;
+        else congestion = 0.35;
+        return {
+          id: idx + 1,
+          name: r.name || `Rute ${idx + 1}`,
+          distance: `${km.toFixed(1)} km`,
+          distanceMeters: r.distanceMeters,
+          duration: Math.round(r.durationSeconds / 60),
+          congestion,
+          toll: false,
+          avgSpeed: Math.round(speed),
+          waypoints: [origin, destination],
+        };
+      });
+
+      const mappedGeoms: [number, number][][] = results.map((r) => r.geometry.coordinates.map(([lon, lat]: [number, number]) => [lat, lon]));
+      const mappedSteps = results.map((r) => r.steps.map((s) => ({
+        instruction: s.instruction,
+        distanceMeters: s.distanceMeters,
+        durationSeconds: s.durationSeconds,
+        location: [s.location[1], s.location[0]] as [number, number],
+      })));
+
+      setRoutes(mappedRoutes);
+      setGeometries(mappedGeoms);
+      setSelectedRouteIndex(0);
+      setRouteSteps(mappedSteps);
+      setNavCoord(mappedGeoms[0]?.[0] ?? null);
+      setNavPtr(0);
       toast.success('Rute berhasil dihitung!');
-    }, 2000);
+    } catch (e: any) {
+      toast.error(e?.message || 'Terjadi kesalahan saat menghitung rute');
+    } finally {
+      setIsCalculating(false);
+    }
   };
 
   const getCongestionColor = (level: number) => {
@@ -104,6 +338,7 @@ const RoutePlanner = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Input Form */}
+          {!fullMap && (
           <div className="lg:col-span-1">
             <Card className="p-6 border-glow bg-card space-y-6 sticky top-24">
               <div>
@@ -123,6 +358,68 @@ const RoutePlanner = () => {
                     onChange={(e) => setOrigin(e.target.value)}
                     className="bg-secondary border-primary/30 focus:border-primary"
                   />
+                  <div className="flex gap-2">
+                    <Button variant="secondary" type="button" onClick={async () => {
+                      if (!navigator.geolocation) {
+                        toast.error('Geolocation tidak didukung browser');
+                        return;
+                      }
+                      navigator.geolocation.getCurrentPosition(async (pos) => {
+                        const lat = pos.coords.latitude;
+                        const lon = pos.coords.longitude;
+                        setOriginCoord([lat, lon]);
+                        const rev = await reverseGeocode(lat, lon);
+                        if (rev) setOrigin(rev.displayName);
+                        else setOrigin(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+                        toast.success('Asal di-set ke lokasi Anda');
+                      }, () => toast.error('Gagal mendapatkan lokasi'));
+                    }}>Asal = Lokasi Saya</Button>
+                  </div>
+                  {originSuggestions.length > 0 && originDebounced.length >= 3 && (
+                    <div className="bg-popover border border-border rounded-md max-h-48 overflow-auto">
+                      {originSuggestions.map((s, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          className="w-full text-left px-3 py-2 hover:bg-secondary text-sm"
+                          onClick={() => {
+                            setOrigin(s.displayName);
+                            setOriginCoord([s.lat, s.lon]);
+                          }}
+                        >
+                          {s.displayName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button type="button" variant="secondary" onClick={() => {
+                      if (originCoord) setFavorites((f) => [{ label: origin, lat: originCoord[0], lon: originCoord[1] }, ...f.filter(x => x.label !== origin)].slice(0, 20));
+                    }}>Simpan Asal</Button>
+                    <Button type="button" variant="secondary" onClick={() => {
+                      if (originCoord) pushHistory({ label: origin, lat: originCoord[0], lon: originCoord[1] });
+                    }}>Simpan Riwayat</Button>
+                  </div>
+                  {favorites.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-1">Favorit</p>
+                      <div className="flex flex-wrap gap-2">
+                        {favorites.slice(0,6).map((f, i) => (
+                          <Button key={i} size="sm" variant="secondary" onClick={() => { setOrigin(f.label); setOriginCoord([f.lat, f.lon]); }}> {f.label} </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {history.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-1">Riwayat</p>
+                      <div className="flex flex-wrap gap-2">
+                        {history.slice(0,6).map((h, i) => (
+                          <Button key={i} size="sm" variant="secondary" onClick={() => { setOrigin(h.label); setOriginCoord([h.lat, h.lon]); }}> {h.label} </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Destination */}
@@ -137,6 +434,23 @@ const RoutePlanner = () => {
                     onChange={(e) => setDestination(e.target.value)}
                     className="bg-secondary border-primary/30 focus:border-primary"
                   />
+                  {destinationSuggestions.length > 0 && destinationDebounced.length >= 3 && (
+                    <div className="bg-popover border border-border rounded-md max-h-48 overflow-auto">
+                      {destinationSuggestions.map((s, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          className="w-full text-left px-3 py-2 hover:bg-secondary text-sm"
+                          onClick={() => {
+                            setDestination(s.displayName);
+                            setDestinationCoord([s.lat, s.lon]);
+                          }}
+                        >
+                          {s.displayName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Vehicle Type */}
@@ -171,6 +485,49 @@ const RoutePlanner = () => {
                         Motor
                       </p>
                     </button>
+                  </div>
+                </div>
+
+                {/* Travel Cost Settings */}
+                <div className="space-y-3 mb-6">
+                  <label className="text-sm text-muted-foreground uppercase tracking-wide">
+                    Biaya Perjalanan (Estimasi)
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Jenis BBM</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button type="button" variant={fuelType==='pertalite'?'default':'secondary'} onClick={()=>setFuelType('pertalite')}>Pertalite</Button>
+                        <Button type="button" variant={fuelType==='pertamax'?'default':'secondary'} onClick={()=>setFuelType('pertamax')}>Pertamax</Button>
+                        <Button type="button" variant={fuelType==='diesel'?'default':'secondary'} onClick={()=>setFuelType('diesel')}>Diesel</Button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Harga BBM (IDR/L)</label>
+                      <Input type="number" value={fuelPrice} onChange={(e) => setFuelPrice(Number(e.target.value))} className="bg-secondary border-primary/30 focus:border-primary" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Efisiensi {vehicleType === 'car' ? 'Mobil' : 'Motor'} (km/L)</label>
+                      <Input type="number" value={vehicleType === 'car' ? efficiencyCar : efficiencyMoto} onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (vehicleType === 'car') setEfficiencyCar(v); else setEfficiencyMoto(v);
+                      }} className="bg-secondary border-primary/30 focus:border-primary" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Tarif Tol (IDR/km)</label>
+                      <Input type="number" value={tollRatePerKm} onChange={(e) => setTollRatePerKm(Number(e.target.value))} className="bg-secondary border-primary/30 focus:border-primary" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Metode Bayar</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button type="button" variant={paymentMethod === 'cash' ? 'default' : 'secondary'} onClick={() => setPaymentMethod('cash')}>Cash</Button>
+                        <Button type="button" variant={paymentMethod === 'cashless' ? 'default' : 'secondary'} onClick={() => setPaymentMethod('cashless')}>Cashless</Button>
+                      </div>
+                    </div>
+                    <div className="col-span-2 flex items-center gap-2">
+                      <input id="usetoll" type="checkbox" checked={useToll} onChange={(e) => setUseToll(e.target.checked)} />
+                      <label htmlFor="usetoll" className="text-xs text-muted-foreground">Lewat Tol</label>
+                    </div>
                   </div>
                 </div>
 
@@ -213,9 +570,160 @@ const RoutePlanner = () => {
               )}
             </Card>
           </div>
+          )}
 
           {/* Routes Results */}
-          <div className="lg:col-span-2">
+          <div className={fullMap ? "lg:col-span-3" : "lg:col-span-2"}>
+            <Card className="border-glow bg-card mb-4 overflow-hidden relative rounded-xl">
+              <div className={fullMap ? "h-[calc(100vh-160px)]" : "h-[560px]"}>
+                {/* Banner instruksi langkah berikutnya */}
+                {selectedRouteIndex != null && routeSteps[selectedRouteIndex] && routeSteps[selectedRouteIndex][currentStepIdx] && (
+                  <div className="absolute z-10 m-2 px-2 py-1 rounded-md bg-black/50 text-foreground text-xs border border-border backdrop-blur">
+                    <span className="font-semibold">Arahan berikut:</span>{' '}
+                    {routeSteps[selectedRouteIndex][currentStepIdx].instruction}
+                  </div>
+                )}
+                {/* North indicator */}
+                <div className="absolute right-2 top-2 z-10 px-2 py-1 rounded-md bg-black/50 text-foreground text-xs border border-border">
+                  N
+                </div>
+                <MapContainerAny center={[-6.2, 106.816]} zoom={mapZoom} scrollWheelZoom zoomControl={false} attributionControl={false} className="h-full w-full">
+                  {/* Ensure tiles reflow when layout changes */}
+                  <InvalidateSize deps={[fullMap, selectedRouteIndex, mapZoom]} />
+                  {/* Scale control */}
+                  {(() => {
+                    function AddScaleControl() {
+                      const map = useMap();
+                      useEffect(() => {
+                        const control = L.control.scale({ metric: true, imperial: false, position: 'bottomleft' });
+                        control.addTo(map);
+                        return () => { try { (control as any).remove(); } catch {} };
+                      }, [map]);
+                      return null;
+                    }
+                    return <AddScaleControl />;
+                  })()}
+                  {tileTheme === 'light' ? (
+                    <TileLayerAny
+                      attribution='&copy; OpenStreetMap contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                  ) : (
+                    <TileLayerAny
+                      attribution='&copy; OpenStreetMap contributors, &copy; CARTO'
+                      url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
+                    />
+                  )}
+                  {originCoord && (
+                    <>
+                      <CircleMarkerAny center={originCoord} radius={14} pathOptions={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.2, opacity: 0.2, weight: 0 }} />
+                      <CircleMarkerAny center={originCoord} radius={8} pathOptions={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.9, weight: 2 }} />
+                    </>
+                  )}
+                  {destinationCoord && (
+                    <>
+                      <CircleMarkerAny center={destinationCoord} radius={14} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.2, opacity: 0.2, weight: 0 }} />
+                      <CircleMarkerAny center={destinationCoord} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.9, weight: 2 }} />
+                    </>
+                  )}
+                  {/* Outline for selected route */}
+                  {selectedRouteIndex != null && geometries[selectedRouteIndex] && (
+                    <PolylineAny
+                      positions={geometries[selectedRouteIndex]}
+                      pathOptions={{ color: '#22d3ee', weight: 10, opacity: 0.25 }}
+                    />
+                  )}
+                  {geometries.map((geom, idx) => (
+                    <PolylineAny
+                      key={idx}
+                      positions={geom}
+                      pathOptions={{
+                        color: idx === (selectedRouteIndex ?? 0) ? '#22d3ee' : '#60a5fa',
+                        weight: idx === (selectedRouteIndex ?? 0) ? 6 : 3,
+                        opacity: idx === (selectedRouteIndex ?? 0) ? 1 : 0.5,
+                        dashArray: idx === (selectedRouteIndex ?? 0) ? undefined : '6 8',
+                        lineCap: 'round',
+                      }}
+                    />
+                  ))}
+                  <FitBounds geometries={geometries} originCoord={originCoord} destinationCoord={destinationCoord} selectedIndex={selectedRouteIndex} />
+                  <FollowMarker coord={navCoord} follow={followMap} />
+                  <ZoomController zoom={mapZoom} />
+                </MapContainerAny>
+              </div>
+              <div className="flex items-center gap-2 p-3 border-t border-border">
+                <Button variant={fullMap ? 'default' : 'secondary'} onClick={() => { setFullMap((v) => !v); track('ui_fullscreen_toggle', { fullMap: !fullMap }); }}>
+                  {fullMap ? 'Keluar Layar Penuh' : 'Peta Layar Penuh'}
+                </Button>
+                <Button variant="secondary" onClick={() => setMapZoom((z) => Math.min(z + 1, 18))}>Zoom In</Button>
+                <Button variant="secondary" onClick={() => setMapZoom((z) => Math.max(z - 1, 3))}>Zoom Out</Button>
+                <Button variant={tileTheme==='dark'?'default':'secondary'} onClick={()=>{ const next = tileTheme==='light'?'dark':'light'; setTileTheme(next); track('ui_tile_theme', { theme: next }); }}>
+                  Tema: {tileTheme==='light'?'Terang':'Gelap'}
+                </Button>
+                <Button variant="secondary" onClick={() => setNavCoord(originCoord || navCoord)}>Recenter</Button>
+                <Button variant={followMap ? 'default' : 'secondary'} onClick={() => { const nv = !followMap; setFollowMap(nv); track('ui_follow_toggle', { follow: nv }); }}>
+                  {followMap ? 'Ikuti Peta: ON' : 'Ikuti Peta: OFF'}
+                </Button>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Kecepatan</span>
+                  <Button variant={navTickMs === 500 ? 'default' : 'secondary'} onClick={() => setNavTickMs(500)}>Lambat</Button>
+                  <Button variant={navTickMs === 300 ? 'default' : 'secondary'} onClick={() => setNavTickMs(300)}>Normal</Button>
+                  <Button variant={navTickMs === 120 ? 'default' : 'secondary'} onClick={() => setNavTickMs(120)}>Cepat</Button>
+                </div>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button
+                    onClick={() => {
+                      if (!geometries.length || selectedRouteIndex == null) return;
+                      setNavRunning((r) => !r);
+                      track('start_navigation', { routeIndex: selectedRouteIndex });
+                    }}
+                    className="bg-primary text-primary-foreground"
+                  >
+                    {navRunning ? 'Pause Navigasi' : 'Mulai Navigasi'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={async () => {
+                      if (!destinationCoord) return;
+                      const start = navCoord || originCoord;
+                      if (!start) return;
+                      try {
+                        track('reroute', {});
+                        const results = await getRoutesOSRM({ lat: start[0], lon: start[1] }, { lat: destinationCoord[0], lon: destinationCoord[1] }, { profile: 'driving', alternatives: true });
+                        const mappedGeoms: [number, number][][] = results.map((r) => r.geometry.coordinates.map(([lon, lat]: [number, number]) => [lat, lon]));
+                        const mappedSteps = results.map((r) => r.steps.map((s) => ({
+                          instruction: s.instruction,
+                          distanceMeters: s.distanceMeters,
+                          durationSeconds: s.durationSeconds,
+                          location: [s.location[1], s.location[0]] as [number, number],
+                        })));
+                        setGeometries(mappedGeoms);
+                        setRouteSteps(mappedSteps);
+                        setSelectedRouteIndex(0);
+                        setNavPtr(0);
+                        setNavCoord(mappedGeoms[0]?.[0] ?? start);
+                        toast.success('Rute diperbarui');
+                      } catch {
+                        toast.error('Gagal melakukan reroute');
+                      }
+                    }}
+                  >
+                    Reroute
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setNavRunning(false);
+                      setNavPtr(0);
+                      setNavCoord(geometries[selectedRouteIndex ?? 0]?.[0] ?? null);
+                    }}
+                  >
+                    Akhiri
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
             {routes.length === 0 ? (
               <Card className="p-12 border-glow bg-card text-center">
                 <Navigation className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -229,7 +737,12 @@ const RoutePlanner = () => {
             ) : (
               <div className="space-y-4">
                 {routes.map((route, index) => (
-                  <Card key={route.id} className="p-6 border-glow bg-card hover:bg-secondary/30 transition-all group">
+                  <Card
+                    key={route.id}
+                    className="p-6 border-glow bg-card hover:bg-secondary/30 transition-all group"
+                    onMouseEnter={() => setSelectedRouteIndex(index)}
+                    onClick={() => setSelectedRouteIndex(index)}
+                  >
                     <div className="space-y-4">
                       {/* Header */}
                       <div className="flex items-start justify-between">
@@ -294,6 +807,49 @@ const RoutePlanner = () => {
                         </div>
                       </div>
 
+                      {/* Cost Estimation */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {(() => {
+                          const km = route.distanceMeters / 1000;
+                          // Toll override by bbox hits
+                          let tollOverride = 0;
+                          const geom = geometries[index] || [];
+                          if (useToll && tollSegments.length && geom.length) {
+                            const used = new Set<number>();
+                            for (let p of geom) {
+                              for (let si = 0; si < tollSegments.length; si++) {
+                                if (used.has(si)) continue;
+                                const s = tollSegments[si];
+                                if (p[0] >= s.bbox.minLat && p[0] <= s.bbox.maxLat && p[1] >= s.bbox.minLon && p[1] <= s.bbox.maxLon) {
+                                  tollOverride += paymentMethod === 'cashless' ? s.cashless : s.cash;
+                                  used.add(si);
+                                }
+                              }
+                            }
+                          }
+                          const base = estimateCosts(km);
+                          const tollCost = tollOverride > 0 ? tollOverride : base.tollCost;
+                          const total = base.fuelCost + tollCost + (paymentMethod === 'cashless' ? (base.fuelCost + tollCost) * cashlessFeeRate : 0);
+                          const fuelCost = base.fuelCost;
+                          return (
+                            <>
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground uppercase tracking-wide">Biaya BBM</p>
+                                <p className="text-lg font-bold text-foreground">{currency.format(Math.round(fuelCost))}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground uppercase tracking-wide">Biaya Tol ({paymentMethod})</p>
+                                <p className="text-lg font-bold text-foreground">{currency.format(Math.round(tollCost))}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Estimasi</p>
+                                <p className="text-lg font-bold text-primary">{currency.format(Math.round(total))}</p>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+
                       {/* Progress Bar */}
                       <div className="space-y-2">
                         <div className="flex justify-between text-xs text-muted-foreground">
@@ -315,11 +871,37 @@ const RoutePlanner = () => {
                       {/* Action Button */}
                       <Button 
                         className="w-full bg-secondary hover:bg-primary hover:text-primary-foreground border border-primary/30 hover:border-primary transition-all"
-                        onClick={() => toast.success(`Navigasi dimulai: ${route.name}`)}
+                        onClick={() => {
+                          setSelectedRouteIndex(index);
+                          setNavPtr(0);
+                          setNavCoord(geometries[index]?.[0] ?? null);
+                          setNavRunning(true);
+                          toast.success(`Navigasi dimulai: ${route.name}`);
+                        }}
                       >
                         <Navigation className="w-4 h-4 mr-2" />
                         Mulai Navigasi
                       </Button>
+
+                      {/* Directions List */}
+                      {selectedRouteIndex === index && routeSteps[index] && (
+                        <div className="mt-2 border-t border-border pt-3 max-h-48 overflow-auto text-sm">
+                          {routeSteps[index].map((st, i) => {
+                            const active = i === currentStepIdx && selectedRouteIndex === index;
+                            const icon = getManeuverIcon(st.instruction);
+                            return (
+                              <div key={i} className={`flex items-start gap-2 py-1 ${active ? 'bg-secondary/40 rounded-md px-2' : ''}`}>
+                                <span className="text-muted-foreground w-4 text-right">{i + 1}.</span>
+                                <span className="mt-0.5">{icon}</span>
+                                <span className="flex-1">
+                                  {st.instruction}
+                                  <span className="text-muted-foreground ml-2">({(st.distanceMeters / 1000).toFixed(1)} km)</span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </Card>
                 ))}
