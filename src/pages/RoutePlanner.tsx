@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MapPin, Navigation, Car, Bike, Clock, TrendingUp, AlertTriangle, CornerDownLeft, CornerDownRight, Flag, MoveRight, GitMerge, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
-import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
-import type { MapContainerProps, TileLayerProps, MapContainer as LeafletMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
+import { lazy, Suspense } from 'react';
+const MapContainer = lazy(() => import('react-leaflet').then((mod) => ({ default: mod.MapContainer })));
+import { TileLayer, useMap, Polyline } from 'react-leaflet';
+import type { TileLayerProps } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import ScaleControl from '@/components/map/ScaleControl';
 
 declare module 'leaflet' {
   interface PathOptions {
@@ -358,6 +360,28 @@ const RoutePlanner = () => {
     return 'Lancar';
   };
 
+  // State variables are already declared at the top of the component
+
+  // Currency formatter helper
+  const currency = new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+  });
+
+  // Function to estimate costs
+  const estimateCosts = (distance: number, vehicleType: string): { fuelCost: number; tollCost: number; totalCost: number } => {
+    const fuelEfficiency = vehicleType === 'car' ? efficiencyCar : efficiencyMoto;
+    const fuelCost = (distance / 1000) * (fuelPrice / fuelEfficiency);
+    const tollCost = useToll ? (distance / 1000) * tollRatePerKm : 0;
+    
+    return {
+      fuelCost,
+      tollCost,
+      totalCost: fuelCost + tollCost
+    };
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header 
@@ -676,364 +700,396 @@ const RoutePlanner = () => {
                   </div>
                 </div>
                 <div className="h-full w-full relative">
-                  {/* MapContainer with proper typing */}
-                  {(() => {
-                    const mapContainerProps: MapContainerProps = {
-                      center: [ -6.2, 106.816 ] as [number, number],
-                      zoom: mapZoom,
-                      style: { height: '100%', width: '100%' },
-                      zoomControl: false,
-                      attributionControl: false
-                    } as const;
-                    
-                    return (
-                      <MapContainer {...mapContainerProps}>
-                  
-                    {/* Disable default controls */}
-                    <div className="leaflet-top leaflet-right">
-                      <div className="leaflet-control-container">
-                        <div className="leaflet-top leaflet-right"></div>
-                      </div>
-                    </div>
-                  {/* Ensure tiles reflow when layout changes */}
-                  <InvalidateSize deps={[fullMap, selectedRouteIndex, mapZoom]} />
-                  {/* Scale control */}
-                  {(() => {
-                    function AddScaleControl() {
-                      const map = useMap();
-                      useEffect(() => {
-                        const control = L.control.scale({ metric: true, imperial: false, position: 'bottomleft' });
-                        control.addTo(map);
-                        return () => { try { control.remove(); } catch { void 0; } };
-                      }, [map]);
-                      return null;
-                    }
-                    return <AddScaleControl />;
-                  })()}
-                  {tileTheme === 'light' ? (
-                    <TileLayer
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                  ) : (
-                    <TileLayer
-                      url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
-                    />
-                  )}
-                  <div className="leaflet-control-attribution leaflet-control">
-                    {tileTheme === 'light' 
-                      ? '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                      : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, © <a href="https://carto.com/attributions">CARTO</a>'
-                    }
-                  </div>
-                  {originCoord && (
-                    <>
-                      <CircleDot center={originCoord} radius={14} options={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.2, opacity: 0.2, weight: 0 }} />
-                      {/* white outline ring */}
-                      <CircleDot center={originCoord} radius={10} options={{ color: '#ffffff', fillOpacity: 0, opacity: 1, weight: 2 }} />
-                      <CircleDot center={originCoord} radius={8} options={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.9, weight: 2 }} />
-                    </>
-                  )}
-                  {destinationCoord && (
-                    <>
-                      <CircleDot center={destinationCoord} radius={14} options={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.2, opacity: 0.2, weight: 0 }} />
-                      {/* white outline ring */}
-                      <CircleDot center={destinationCoord} radius={10} options={{ color: '#ffffff', fillOpacity: 0, opacity: 1, weight: 2 }} />
-                      <CircleDot center={destinationCoord} radius={8} options={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.9, weight: 2 }} />
-                    </>
-                  )}
-                  {/* Routes with white underlay and colored stroke */}
-                  {(showAlternatives ? geometries : (selectedRouteIndex != null && geometries[selectedRouteIndex] ? [geometries[selectedRouteIndex]] : [])).map((geom, idx) => (
-                    <>
-                      {/* underlay */}
-                      <Polyline
-                        key={`u-${selectedRouteIndex ?? 0}-${idx}`}
-                        positions={geom}
-                        pathOptions={{ color: '#ffffff', weight: (selectedRouteIndex ?? 0) === idx ? 10 : 8, opacity: 0.7, lineCap: 'round' }}
-                      />
-                      {/* main stroke */}
-                      <Polyline
-                        key={`m-${selectedRouteIndex ?? 0}-${idx}`}
-                        positions={geom}
-                        pathOptions={{
-                          color: ((selectedRouteIndex ?? 0) === idx) ? '#1a73e8' : '#9aa0a6',
-                          weight: ((selectedRouteIndex ?? 0) === idx) ? 6 : 4,
-                          opacity: ((selectedRouteIndex ?? 0) === idx) ? 1 : 0.9,
-                          dashArray: ((selectedRouteIndex ?? 0) === idx) ? undefined : '6 8',
-                          lineCap: 'round',
-                        }}
-                      />
-                    </>
-                  ))}
-                  <FitBounds geometries={geometries} originCoord={originCoord} destinationCoord={destinationCoord} selectedIndex={selectedRouteIndex} />
-                  <FollowMarker coord={navCoord} follow={followMap} />
-                  <ZoomController zoom={mapZoom} />
+                  <div style={{ height: '100%', width: '100%' }}>
+                    <div style={{ height: '100%', width: '100%' }}>
+                      <div style={{ height: '100%', width: '100%' }}>
+                      <MapContainer 
+                        center={[ -6.2, 106.816 ] as [number, number]} 
+                        zoom={mapZoom}
+                        style={{ height: '100%', width: '100%' }}
+                        zoomControl={false}
+                        attributionControl={false}
+                      >
+                      <InvalidateSize deps={[fullMap, selectedRouteIndex, mapZoom]} />
+                      
+                      {/* Tile Layer */}
+                      {tileTheme === 'light' ? (
+                        <TileLayer
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                      ) : (
+                        <TileLayer
+                          url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
+                        />
+                      )}
+                      
+                      {/* Scale control */}
+                      <ScaleControl />
+                      
+                      {/* Map content */}
+                      {originCoord && (
+                        <>
+                          <CircleDot 
+                            center={originCoord} 
+                            radius={14} 
+                            options={{ 
+                              color: '#22d3ee', 
+                              fillColor: '#22d3ee', 
+                              fillOpacity: 0.2, 
+                              opacity: 0.2, 
+                              weight: 0 
+                            }} 
+                          />
+                          <CircleDot 
+                            center={originCoord} 
+                            radius={10} 
+                            options={{ 
+                              color: '#ffffff', 
+                              fillOpacity: 0, 
+                              opacity: 1, 
+                              weight: 2 
+                            }} 
+                          />
+                          <CircleDot 
+                            center={originCoord} 
+                            radius={8} 
+                            options={{ 
+                              color: '#22d3ee', 
+                              fillColor: '#22d3ee', 
+                              fillOpacity: 0.9, 
+                              weight: 2 
+                            }} 
+                          />
+                        </>
+                      )}
+                      {destinationCoord && (
+                        <>
+                          <CircleDot 
+                            center={destinationCoord} 
+                            radius={14} 
+                            options={{ 
+                              color: '#ef4444', 
+                              fillColor: '#ef4444', 
+                              fillOpacity: 0.2, 
+                              opacity: 0.2, 
+                              weight: 0 
+                            }} 
+                          />
+                          <CircleDot 
+                            center={destinationCoord} 
+                            radius={10} 
+                            options={{ 
+                              color: '#ffffff', 
+                              fillOpacity: 0, 
+                              opacity: 1, 
+                              weight: 2 
+                            }} 
+                          />
+                          <CircleDot 
+                            center={destinationCoord} 
+                            radius={8} 
+                            options={{ 
+                              color: '#ef4444', 
+                              fillColor: '#ef4444', 
+                              fillOpacity: 0.9, 
+                              weight: 2 
+                            }} 
+                          />
+                        </>
+                      )}
+                      {/* Routes with white underlay and colored stroke */}
+                      {(showAlternatives ? geometries : (selectedRouteIndex != null && geometries[selectedRouteIndex] ? [geometries[selectedRouteIndex]] : [])).map((geom, idx) => (
+                        <div key={`route-${selectedRouteIndex ?? 0}-${idx}`}>
+                          {/* underlay */}
+                          <Polyline
+                            positions={geom}
+                            pathOptions={{ color: '#ffffff', weight: (selectedRouteIndex ?? 0) === idx ? 10 : 8, opacity: 0.7, lineCap: 'round' }}
+                          />
+                          {/* main stroke */}
+                          <Polyline
+                            key={`m-${selectedRouteIndex ?? 0}-${idx}`}
+                            positions={geom}
+                            pathOptions={{
+                              color: ((selectedRouteIndex ?? 0) === idx) ? '#1a73e8' : '#9aa0a6',
+                              weight: ((selectedRouteIndex ?? 0) === idx) ? 6 : 4,
+                              opacity: ((selectedRouteIndex ?? 0) === idx) ? 1 : 0.9,
+                              dashArray: ((selectedRouteIndex ?? 0) === idx) ? undefined : '6 8',
+                              lineCap: 'round',
+                            }}
+                          />
+                        </div>
+                      ))}
+                      <FitBounds geometries={geometries} originCoord={originCoord} destinationCoord={destinationCoord} selectedIndex={selectedRouteIndex} />
+                      <FollowMarker coord={navCoord} follow={followMap} />
+                      <ZoomController zoom={mapZoom} />
                       </MapContainer>
-                    );
-                  })()}
-              </div>
-              </div>
-              <div className="flex items-center gap-3 p-4 border-t border-border">
-                <Button variant={fullMap ? 'default' : 'secondary'} onClick={() => { setFullMap((v) => !v); track('ui_fullscreen_toggle', { fullMap: !fullMap }); }}>
-                  {fullMap ? 'Keluar Layar Penuh' : 'Peta Layar Penuh'}
-                </Button>
-                <Button variant="secondary" onClick={() => setMapZoom((z) => Math.min(z + 1, 18))}>Zoom In</Button>
-                <Button variant="secondary" onClick={() => setMapZoom((z) => Math.max(z - 1, 3))}>Zoom Out</Button>
-                <Button variant={tileTheme==='dark'?'default':'secondary'} onClick={()=>{ const next = tileTheme==='light'?'dark':'light'; setTileTheme(next); track('ui_tile_theme', { theme: next }); }}>
-                  Tema: {tileTheme==='light'?'Terang':'Gelap'}
-                </Button>
-                <Button variant={showAlternatives ? 'default' : 'secondary'} onClick={() => setShowAlternatives((v) => !v)}>
-                  {showAlternatives ? 'Tampilkan Alternatif: ON' : 'Tampilkan Alternatif: OFF'}
-                </Button>
-                <Button variant="secondary" onClick={() => setNavCoord(originCoord || navCoord)}>Recenter</Button>
-                <Button variant={followMap ? 'default' : 'secondary'} onClick={() => { const nv = !followMap; setFollowMap(nv); track('ui_follow_toggle', { follow: nv }); }}>
-                  {followMap ? 'Ikuti Peta: ON' : 'Ikuti Peta: OFF'}
-                </Button>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Kecepatan</span>
-                  <Button variant={navTickMs === 500 ? 'default' : 'secondary'} onClick={() => setNavTickMs(500)}>Lambat</Button>
-                  <Button variant={navTickMs === 300 ? 'default' : 'secondary'} onClick={() => setNavTickMs(300)}>Normal</Button>
-                  <Button variant={navTickMs === 120 ? 'default' : 'secondary'} onClick={() => setNavTickMs(120)}>Cepat</Button>
+                    </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="ml-auto flex items-center gap-2">
-                  <Button
-                    onClick={() => {
-                      if (!geometries.length || selectedRouteIndex == null) return;
-                      setNavRunning((r) => !r);
-                      track('start_navigation', { routeIndex: selectedRouteIndex });
-                    }}
-                    className="bg-primary text-primary-foreground"
-                  >
-                    {navRunning ? 'Pause Navigasi' : 'Mulai Navigasi'}
+                <div className="flex items-center gap-3 p-4 border-t border-border">
+                  <Button variant={fullMap ? 'default' : 'secondary'} onClick={() => { setFullMap((v) => !v); track('ui_fullscreen_toggle', { fullMap: !fullMap }); }}>
+                    {fullMap ? 'Keluar Layar Penuh' : 'Peta Layar Penuh'}
                   </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={async () => {
-                      if (!destinationCoord) return;
-                      const start = navCoord || originCoord;
-                      if (!start) return;
-                      try {
-                        track('reroute', {});
-                        const results = await getRoutesOSRM({ lat: start[0], lon: start[1] }, { lat: destinationCoord[0], lon: destinationCoord[1] }, { profile: 'driving', alternatives: true });
-                        const mappedGeoms: [number, number][][] = results.map((r) => r.geometry.coordinates.map(([lon, lat]: [number, number]) => [lat, lon]));
-                        const mappedSteps = results.map((r) => r.steps.map((s) => ({
-                          instruction: s.instruction,
-                          distanceMeters: s.distanceMeters,
-                          durationSeconds: s.durationSeconds,
-                          location: [s.location[1], s.location[0]] as [number, number],
-                        })));
-                        setGeometries(mappedGeoms);
-                        setRouteSteps(mappedSteps);
-                        setSelectedRouteIndex(0);
+                  <Button variant="secondary" onClick={() => setMapZoom((z) => Math.min(z + 1, 18))}>Zoom In</Button>
+                  <Button variant="secondary" onClick={() => setMapZoom((z) => Math.max(z - 1, 3))}>Zoom Out</Button>
+                  <Button variant={tileTheme==='dark'?'default':'secondary'} onClick={()=>{ const next = tileTheme==='light'?'dark':'light'; setTileTheme(next); track('ui_tile_theme', { theme: next }); }}>
+                    Tema: {tileTheme==='light'?'Terang':'Gelap'}
+                  </Button>
+                  <Button variant={showAlternatives ? 'default' : 'secondary'} onClick={() => setShowAlternatives((v) => !v)}>
+                    {showAlternatives ? 'Tampilkan Alternatif: ON' : 'Tampilkan Alternatif: OFF'}
+                  </Button>
+                  <Button variant="secondary" onClick={() => setNavCoord(originCoord || navCoord)}>Recenter</Button>
+                  <Button variant={followMap ? 'default' : 'secondary'} onClick={() => { const nv = !followMap; setFollowMap(nv); track('ui_follow_toggle', { follow: nv }); }}>
+                    {followMap ? 'Ikuti Peta: ON' : 'Ikuti Peta: OFF'}
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Kecepatan</span>
+                    <Button variant={navTickMs === 500 ? 'default' : 'secondary'} onClick={() => setNavTickMs(500)}>Lambat</Button>
+                    <Button variant={navTickMs === 300 ? 'default' : 'secondary'} onClick={() => setNavTickMs(300)}>Normal</Button>
+                    <Button variant={navTickMs === 100 ? 'default' : 'secondary'} onClick={() => setNavTickMs(100)}>Cepat</Button>
+                  </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      onClick={() => {
+                        if (!geometries.length || selectedRouteIndex == null) return;
+                        setNavRunning((r) => !r);
+                        track('start_navigation', { routeIndex: selectedRouteIndex });
+                      }}
+                      className="bg-primary text-primary-foreground"
+                    >
+                      {navRunning ? 'Pause Navigasi' : 'Mulai Navigasi'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={async () => {
+                        if (!destinationCoord) return;
+                        const start = navCoord || originCoord;
+                        if (!start) return;
+                        try {
+                          track('reroute', {});
+                          const results = await getRoutesOSRM({ lat: start[0], lon: start[1] }, { lat: destinationCoord[0], lon: destinationCoord[1] }, { profile: 'driving', alternatives: true });
+                          const mappedGeoms: [number, number][][] = results.map((r) => r.geometry.coordinates.map(([lon, lat]: [number, number]) => [lat, lon]));
+                          const mappedSteps = results.map((r) => r.steps.map((s) => ({
+                            instruction: s.instruction,
+                            distanceMeters: s.distanceMeters,
+                            durationSeconds: s.durationSeconds,
+                            location: [s.location[1], s.location[0]] as [number, number],
+                          })));
+                          setGeometries(mappedGeoms);
+                          setRouteSteps(mappedSteps);
+                          setSelectedRouteIndex(0);
+                          setNavPtr(0);
+                          setNavCoord(mappedGeoms[0]?.[0] ?? start);
+                          toast.success('Rute diperbarui');
+                        } catch {
+                          toast.error('Gagal melakukan reroute');
+                        }
+                      }}
+                    >
+                      Reroute
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setNavRunning(false);
                         setNavPtr(0);
-                        setNavCoord(mappedGeoms[0]?.[0] ?? start);
-                        toast.success('Rute diperbarui');
-                      } catch {
-                        toast.error('Gagal melakukan reroute');
-                      }
-                    }}
-                  >
-                    Reroute
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setNavRunning(false);
-                      setNavPtr(0);
-                      setNavCoord(geometries[selectedRouteIndex ?? 0]?.[0] ?? null);
-                    }}
-                  >
-                    Akhiri
-                  </Button>
+                        setNavCoord(geometries[selectedRouteIndex ?? 0]?.[0] ?? null);
+                      }}
+                    >
+                      Akhiri
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </Card>
-
-            {routes.length === 0 ? (
-              <Card className="p-12 border-glow bg-card text-center">
-                <Navigation className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <h3 className="text-xl font-bold text-muted-foreground mb-2">
-                  Belum Ada Rute
-                </h3>
-                <p className="text-muted-foreground">
-                  Masukkan kota asal dan tujuan, lalu klik tombol "Hitung Rute"
-                </p>
               </Card>
-            ) : (
-              <div className="space-y-4">
-                {routes.map((route, index) => (
-                  <Card
-                    key={route.id}
-                    className="p-6 border-glow bg-card hover:bg-secondary/30 transition-all group"
-                    onMouseEnter={() => setSelectedRouteIndex(index)}
-                    onClick={() => setSelectedRouteIndex(index)}
-                  >
-                    <div className="space-y-4">
-                      {/* Header */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="w-8 h-8 rounded-full bg-primary/20 border border-primary text-primary flex items-center justify-center font-bold text-sm">
-                              {index + 1}
-                            </span>
-                            <h3 className="text-lg font-bold text-primary group-hover:glow-text-cyan transition-all">
-                              {route.name}
-                            </h3>
+
+              {routes.length === 0 ? (
+                <Card className="p-12 border-glow bg-card text-center">
+                  <Navigation className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                  <h3 className="text-xl font-bold text-muted-foreground mb-2">
+                    Belum Ada Rute
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Masukkan kota asal dan tujuan, lalu klik tombol "Hitung Rute"
+                  </p>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {routes.map((route, index) => (
+                    <Card
+                      key={route.id}
+                      className="p-6 border-glow bg-card hover:bg-secondary/30 transition-all group"
+                      onMouseEnter={() => setSelectedRouteIndex(index)}
+                      onClick={() => setSelectedRouteIndex(index)}
+                    >
+                      <div className="space-y-4">
+                        {/* Header */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="w-8 h-8 rounded-full bg-primary/20 border border-primary text-primary flex items-center justify-center font-bold text-sm">
+                                {index + 1}
+                              </span>
+                              <h3 className="text-lg font-bold text-primary group-hover:glow-text-cyan transition-all">
+                                {route.name}
+                              </h3>
+                            </div>
+                            <p className="text-sm text-muted-foreground flex items-center gap-2">
+                              <MapPin className="w-4 h-4" />
+                              {route.waypoints.join(' → ')}
+                            </p>
                           </div>
-                          <p className="text-sm text-muted-foreground flex items-center gap-2">
-                            <MapPin className="w-4 h-4" />
-                            {route.waypoints.join(' → ')}
-                          </p>
-                        </div>
-                        {route.toll && (
-                          <span className="px-3 py-1 rounded-full bg-yellow-400/20 border border-yellow-400 text-yellow-400 text-xs font-bold uppercase">
-                            Tol
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Stats Grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            Waktu
-                          </p>
-                          <p className="text-2xl font-bold text-primary">{route.duration}</p>
-                          <p className="text-xs text-muted-foreground">menit</p>
+                          {route.toll && (
+                            <span className="px-3 py-1 rounded-full bg-yellow-400/20 border border-yellow-400 text-yellow-400 text-xs font-bold uppercase">
+                              Tol
+                            </span>
+                          )}
                         </div>
 
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                            <Navigation className="w-3 h-3" />
-                            Jarak
-                          </p>
-                          <p className="text-2xl font-bold text-foreground">{route.distance}</p>
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Waktu
+                            </p>
+                            <p className="text-2xl font-bold text-primary">{route.duration}</p>
+                            <p className="text-xs text-muted-foreground">menit</p>
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                              <Navigation className="w-3 h-3" />
+                              Jarak
+                            </p>
+                            <p className="text-2xl font-bold text-foreground">{route.distance}</p>
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                              <TrendingUp className="w-3 h-3" />
+                              Kecepatan
+                            </p>
+                            <p className="text-2xl font-bold text-foreground">{route.avgSpeed}</p>
+                            <p className="text-xs text-muted-foreground">km/jam</p>
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" />
+                              Kemacetan
+                            </p>
+                            <p className={`text-2xl font-bold ${getCongestionColor(route.congestion)}`}>
+                              {getCongestionLabel(route.congestion)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{(route.congestion * 100).toFixed(0)}%</p>
+                          </div>
                         </div>
 
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                            <TrendingUp className="w-3 h-3" />
-                            Kecepatan
-                          </p>
-                          <p className="text-2xl font-bold text-foreground">{route.avgSpeed}</p>
-                          <p className="text-xs text-muted-foreground">km/jam</p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            Kemacetan
-                          </p>
-                          <p className={`text-2xl font-bold ${getCongestionColor(route.congestion)}`}>
-                            {getCongestionLabel(route.congestion)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{(route.congestion * 100).toFixed(0)}%</p>
-                        </div>
-                      </div>
-
-                      {/* Cost Estimation */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {(() => {
-                          const km = route.distanceMeters / 1000;
-                          // Toll override by bbox hits
-                          let tollOverride = 0;
-                          const geom = geometries[index] || [];
-                          if (useToll && tollSegments.length && geom.length) {
-                            const used = new Set<number>();
-                            for (const p of geom) {
-                              for (let si = 0; si < tollSegments.length; si++) {
-                                if (used.has(si)) continue;
-                                const s = tollSegments[si];
-                                if (p[0] >= s.bbox.minLat && p[0] <= s.bbox.maxLat && p[1] >= s.bbox.minLon && p[1] <= s.bbox.maxLon) {
-                                  tollOverride += paymentMethod === 'cashless' ? s.cashless : s.cash;
-                                  used.add(si);
+                        {/* Cost Estimation */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {(() => {
+                            const km = route.distanceMeters / 1000;
+                            // Toll override by bbox hits
+                            let tollOverride = 0;
+                            const geom = geometries[index] || [];
+                            if (useToll && tollSegments.length && geom.length) {
+                              const used = new Set<number>();
+                              for (const p of geom) {
+                                for (let si = 0; si < tollSegments.length; si++) {
+                                  if (used.has(si)) continue;
+                                  const s = tollSegments[si];
+                                  if (p[0] >= s.bbox.minLat && p[0] <= s.bbox.maxLat && p[1] >= s.bbox.minLon && p[1] <= s.bbox.maxLon) {
+                                    tollOverride += paymentMethod === 'cashless' ? s.cashless : s.cash;
+                                    used.add(si);
+                                  }
                                 }
                               }
                             }
-                          }
-                          const base = estimateCosts(km);
-                          const tollCost = tollOverride > 0 ? tollOverride : base.tollCost;
-                          const total = base.fuelCost + tollCost + (paymentMethod === 'cashless' ? (base.fuelCost + tollCost) * cashlessFeeRate : 0);
-                          const fuelCost = base.fuelCost;
-                          return (
-                            <>
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground uppercase tracking-wide">Biaya BBM</p>
-                                <p className="text-lg font-bold text-foreground">{currency.format(Math.round(fuelCost))}</p>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground uppercase tracking-wide">Biaya Tol ({paymentMethod})</p>
-                                <p className="text-lg font-bold text-foreground">{currency.format(Math.round(tollCost))}</p>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Estimasi</p>
-                                <p className="text-lg font-bold text-primary">{currency.format(Math.round(total))}</p>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Tingkat Kepadatan</span>
-                          <span>{(route.congestion * 100).toFixed(0)}%</span>
-                        </div>
-                        <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full transition-all ${
-                              route.congestion >= 0.7 ? 'bg-destructive' : 
-                              route.congestion >= 0.5 ? 'bg-yellow-400' : 
-                              'bg-green-400'
-                            }`}
-                            style={{ width: `${route.congestion * 100}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Action Button */}
-                      <Button 
-                        className="w-full bg-secondary hover:bg-primary hover:text-primary-foreground border border-primary/30 hover:border-primary transition-all"
-                        onClick={() => {
-                          setSelectedRouteIndex(index);
-                          setNavPtr(0);
-                          setNavCoord(geometries[index]?.[0] ?? null);
-                          setNavRunning(true);
-                          toast.success(`Navigasi dimulai: ${route.name}`);
-                        }}
-                      >
-                        <Navigation className="w-4 h-4 mr-2" />
-                        Mulai Navigasi
-                      </Button>
-
-                      {/* Directions List */}
-                      {selectedRouteIndex === index && routeSteps[index] && (
-                        <div className="mt-2 border-t border-border pt-3 max-h-48 overflow-auto text-sm">
-                          {routeSteps[index].map((st, i) => {
-                            const active = i === currentStepIdx && selectedRouteIndex === index;
-                            const icon = getManeuverIcon(st.instruction);
+                            const base = estimateCosts(km);
+                            const tollCost = tollOverride > 0 ? tollOverride : base.tollCost;
+                            const total = base.fuelCost + tollCost + (paymentMethod === 'cashless' ? (base.fuelCost + tollCost) * cashlessFeeRate : 0);
+                            const fuelCost = base.fuelCost;
                             return (
-                              <div key={i} className={`flex items-start gap-2 py-1 ${active ? 'bg-secondary/40 rounded-md px-2' : ''}`}>
-                                <span className="text-muted-foreground w-4 text-right">{i + 1}.</span>
-                                <span className="mt-0.5">{icon}</span>
-                                <span className="flex-1">
-                                  {st.instruction}
-                                  <span className="text-muted-foreground ml-2">({(st.distanceMeters / 1000).toFixed(1)} km)</span>
-                                </span>
-                              </div>
+                              <>
+                                <div className="space-y-1">
+                                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Biaya BBM</p>
+                                  <p className="text-lg font-bold text-foreground">{currency.format(Math.round(fuelCost))}</p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Biaya Tol ({paymentMethod})</p>
+                                  <p className="text-lg font-bold text-foreground">{currency.format(Math.round(tollCost))}</p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Estimasi</p>
+                                  <p className="text-lg font-bold text-primary">{currency.format(Math.round(total))}</p>
+                                </div>
+                              </>
                             );
-                          })}
+                          })()}
                         </div>
-                      )}
-                    </div>
-                  </Card>
-                ))}
+
+                        {/* Progress Bar */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Tingkat Kepadatan</span>
+                            <span>{(route.congestion * 100).toFixed(0)}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all ${
+                                route.congestion >= 0.7 ? 'bg-destructive' : 
+                                route.congestion >= 0.5 ? 'bg-yellow-400' : 
+                                'bg-green-400'
+                              }`}
+                              style={{ width: `${route.congestion * 100}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
+                        <Button 
+                          className="w-full bg-secondary hover:bg-primary hover:text-primary-foreground border border-primary/30 hover:border-primary transition-all"
+                          onClick={() => {
+                            setSelectedRouteIndex(index);
+                            setNavPtr(0);
+                            setNavCoord(geometries[index]?.[0] ?? null);
+                            setNavRunning(true);
+                            toast.success(`Navigasi dimulai: ${route.name}`);
+                          }}
+                        >
+                          <Navigation className="w-4 h-4 mr-2" />
+                          Mulai Navigasi
+                        </Button>
+
+                        {/* Directions List */}
+                        {selectedRouteIndex === index && routeSteps[index] && (
+                          <div className="mt-2 border-t border-border pt-3 max-h-48 overflow-auto text-sm">
+                            {routeSteps[index].map((st, i) => {
+                              const active = i === currentStepIdx && selectedRouteIndex === index;
+                              const icon = getManeuverIcon(st.instruction);
+                              return (
+                                <div key={i} className={`flex items-start gap-2 py-1 ${active ? 'bg-secondary/40 rounded-md px-2' : ''}`}>
+                                  <span className="text-muted-foreground w-4 text-right">{i + 1}.</span>
+                                  <span className="mt-0.5">{icon}</span>
+                                  <span className="flex-1">
+                                    {st.instruction}
+                                    <span className="text-muted-foreground ml-2">({(st.distanceMeters / 1000).toFixed(1)} km)</span>
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };

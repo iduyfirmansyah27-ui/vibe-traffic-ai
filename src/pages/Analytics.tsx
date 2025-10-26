@@ -54,7 +54,10 @@ const Analytics = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Header 
+        onToggleTheme={() => {}} 
+        isDarkMode={false} 
+      />
       
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">

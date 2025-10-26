@@ -47,7 +47,10 @@ const About = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Header 
+        onToggleTheme={() => {}} 
+        isDarkMode={false} 
+      />
       
       <main className="container mx-auto px-4 py-8">
         {/* Hero Section */}
