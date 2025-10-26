@@ -651,7 +651,7 @@ const RoutePlanner = () => {
                 })()}
               </div>
             )}
-<div className="lg:col-span-2">
+            <div className="lg:col-span-2">
               <Card className="border-glow bg-card mb-6 overflow-hidden relative rounded-xl">
                 <div className={fullMap ? "h-[calc(100vh-160px)]" : "h-[580px]"}>
                 {/* Banner instruksi langkah berikutnya */}
@@ -887,6 +887,9 @@ const RoutePlanner = () => {
                     </Button>
                   </div>
                 </div>
+                </div>
+                </div>
+                </div>
               </Card>
               {routes.length === 0 ? (
                 <Card className="p-12 border-glow bg-card text-center">
@@ -1068,9 +1071,9 @@ const RoutePlanner = () => {
                         )}
                       </div>
                     </div>
-                  ))}
-                </Card>
-              )}
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
