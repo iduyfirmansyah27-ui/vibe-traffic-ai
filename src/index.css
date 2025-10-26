@@ -10,112 +10,166 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
+    /* Light Theme */
     --background: 0 0% 100%;
-    --foreground: 222 47% 5%;
+    --foreground: 0 0% 13%; /* Dark gray for text */
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 5%;
+    --card-foreground: 0 0% 13%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 5%;
+    --popover-foreground: 0 0% 13%;
 
-    --primary: 220 90% 56%;
+    --primary: 214 100% 59%; /* #3A86FF */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 5%;
+    --secondary: 225 34% 95%;
+    --secondary-foreground: 0 0% 13%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 25% 30%;
+    --muted: 225 34% 95%;
+    --muted-foreground: 0 0% 45%;
 
-    --accent: 220 90% 56%;
+    --accent: 214 100% 59%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 100% 61%; /* #FF4C4C */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 215 20% 87%;
-    --input: 215 20% 87%;
-    --ring: 220 90% 56%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 214 100% 59%;
 
-    --radius: 1rem;
+    --radius: 0.75rem;
 
-    --neon-cyan: 190 100% 40%;
-    --neon-blue: 220 90% 56%;
-    --deep-navy: 220 50% 10%;
-    --glow-cyan: 190 100% 45%;
+    /* Traffic Colors */
+    --traffic-green: 148 75% 66%; /* #5BE595 */
+    --traffic-yellow: 50 100% 52%; /* #FFD60A */
+    --traffic-red: 0 100% 61%; /* #FF4C4C */
+    --ai-purple: 275 71% 44%; /* #7B2CBF */
     
+    /* Custom Colors */
+    --neon-cyan: 182 100% 50%; /* #00FFF5 */
+    --neon-blue: 214 100% 59%; /* #3A86FF */
+    --deep-navy: 223 60% 12%; /* #0B132B */
+    --panel-bg: 225 33% 20%; /* #1C2541 */
+    --soft-white: 0 0% 88%; /* #E0E0E0 */
+    --gray-blue: 210 9% 45%; /* #6C757D */
+    
+    /* Sidebar */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 222 47% 5%;
-    --sidebar-primary: 220 90% 56%;
+    --sidebar-foreground: 0 0% 13%;
+    --sidebar-primary: 214 100% 59%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 40% 96%;
-    --sidebar-accent-foreground: 222 47% 5%;
-    --sidebar-border: 215 20% 87%;
-    --sidebar-ring: 220 90% 56%;
+    --sidebar-accent: 225 34% 95%;
+    --sidebar-accent-foreground: 0 0% 13%;
+    --sidebar-border: 0 0% 89%;
+    --sidebar-ring: 214 100% 59%;
   }
 
   .dark {
-    --background: 222 47% 5%;
-    --foreground: 190 100% 95%;
+    /* Dark Theme */
+    --background: 223 60% 12%; /* #0B132B - Midnight Blue */
+    --foreground: 0 0% 88%; /* #E0E0E0 - Soft White */
 
-    --card: 220 40% 8%;
-    --card-foreground: 190 100% 95%;
+    --card: 225 33% 20%; /* #1C2541 - Deep Cyan */
+    --card-foreground: 0 0% 88%;
 
-    --popover: 220 40% 8%;
-    --popover-foreground: 190 100% 95%;
+    --popover: 225 33% 20%; /* #1C2541 */
+    --popover-foreground: 0 0% 88%;
 
-    --primary: 190 100% 50%;
-    --primary-foreground: 222 47% 5%;
+    --primary: 214 100% 59%; /* #3A86FF - Neon Blue */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 50% 15%;
-    --secondary-foreground: 190 100% 95%;
+    --secondary: 225 33% 20%; /* #1C2541 */
+    --secondary-foreground: 0 0% 88%;
 
-    --muted: 210 30% 20%;
-    --muted-foreground: 190 50% 70%;
+    --muted: 225 33% 25%;
+    --muted-foreground: 210 9% 45%; /* #6C757D - Gray-Blue */
 
-    --accent: 190 100% 50%;
-    --accent-foreground: 222 47% 5%;
+    --accent: 182 100% 50%; /* #00FFF5 - Aqua Glow */
+    --accent-foreground: 223 60% 12%; /* #0B132B - Dark background */
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 190 100% 95%;
+    --destructive: 0 100% 61%; /* #FF4C4C - Traffic Red */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 190 80% 30%;
-    --input: 190 50% 20%;
-    --ring: 190 100% 50%;
+    --border: 225 33% 30%; /* Slightly lighter than card for contrast */
+    --input: 225 33% 25%; /* Slightly lighter than card */
+    --ring: 214 100% 59%; /* #3A86FF - Neon Blue */
 
-    --neon-cyan: 190 100% 50%;
-    --neon-blue: 210 100% 60%;
-    --deep-navy: 220 50% 10%;
-    --glow-cyan: 190 100% 50%;
+    /* Traffic Colors */
+    --traffic-green: 148 75% 66%; /* #5BE595 */
+    --traffic-yellow: 50 100% 52%; /* #FFD60A */
+    --traffic-red: 0 100% 61%; /* #FF4C4C */
+    --ai-purple: 275 71% 44%; /* #7B2CBF */
+    
+    /* Custom Colors */
+    --neon-cyan: 182 100% 50%; /* #00FFF5 */
+    --neon-blue: 214 100% 59%; /* #3A86FF */
+    --deep-navy: 223 60% 12%; /* #0B132B */
+    --panel-bg: 225 33% 20%; /* #1C2541 */
+    --soft-white: 0 0% 88%; /* #E0E0E0 */
+    --gray-blue: 210 9% 45%; /* #6C757D */
 
-    --sidebar-background: 220 40% 8%;
-    --sidebar-foreground: 190 100% 95%;
-    --sidebar-primary: 190 100% 50%;
-    --sidebar-primary-foreground: 222 47% 5%;
-    --sidebar-accent: 210 50% 15%;
-    --sidebar-accent-foreground: 190 100% 95%;
-    --sidebar-border: 190 80% 30%;
-    --sidebar-ring: 190 100% 50%;
+    /* Sidebar */
+    --sidebar-background: 225 33% 20%; /* #1C2541 */
+    --sidebar-foreground: 0 0% 88%;
+    --sidebar-primary: 214 100% 59%; /* #3A86FF */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 33% 25%;
+    --sidebar-accent-foreground: 0 0% 88%;
+    --sidebar-border: 225 33% 30%;
+    --sidebar-ring: 214 100% 59%;
   }
 }
 
 @layer utilities {
+  /* Glow Effects */
   .glow-cyan {
-    box-shadow: 0 0 20px hsl(var(--neon-cyan) / 0.5), 0 0 40px hsl(var(--neon-cyan) / 0.3);
+    box-shadow: 0 0 15px hsl(var(--neon-cyan) / 0.6), 0 0 30px hsl(var(--neon-cyan) / 0.3);
+  }
+  
+  .glow-blue {
+    box-shadow: 0 0 15px hsl(var(--neon-blue) / 0.6), 0 0 30px hsl(var(--neon-blue) / 0.3);
   }
   
   .glow-text-cyan {
     text-shadow: 0 0 10px hsl(var(--neon-cyan) / 0.8), 0 0 20px hsl(var(--neon-cyan) / 0.4);
   }
   
+  .glow-text-blue {
+    text-shadow: 0 0 10px hsl(var(--neon-blue) / 0.8), 0 0 20px hsl(var(--neon-blue) / 0.4);
+  }
+  
   .border-glow {
     border: 1px solid hsl(var(--border));
-    box-shadow: 0 0 10px hsl(var(--neon-cyan) / 0.2);
+    box-shadow: 0 0 15px hsl(var(--neon-cyan) / 0.3);
+  }
+  
+  .border-glow-blue {
+    border: 1px solid hsl(var(--neon-blue) / 0.5);
+    box-shadow: 0 0 15px hsl(var(--neon-blue) / 0.3);
   }
   
   .animate-pulse-slow {
     animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  /* Traffic Status Badges */
+  .traffic-status-green {
+    @apply bg-[hsl(148,75%,66%)] text-[hsl(223,60%,12%)];
+  }
+  
+  .traffic-status-yellow {
+    @apply bg-[hsl(50,100%,52%)] text-[hsl(223,60%,12%)];
+  }
+  
+  .traffic-status-red {
+    @apply bg-[hsl(0,100%,61%)] text-white;
+  }
+  
+  /* Card Styles */
+  .card-gradient {
+    @apply bg-gradient-to-br from-[hsl(223,60%,12%)] to-[hsl(225,33%,20%)];
   }
 }
 
