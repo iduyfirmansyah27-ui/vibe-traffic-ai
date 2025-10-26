@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import Header from '@/components/Header';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MapPin, Navigation, Car, Bike, Clock, TrendingUp, AlertTriangle, CornerDownLeft, CornerDownRight, Flag, MoveRight, GitMerge, RefreshCcw } from 'lucide-react';
+import { 
+  MapPin, Navigation, Car, Bike, Clock, 
+  TrendingUp, AlertTriangle, CornerDownLeft, 
+  CornerDownRight, Flag, MoveRight, GitMerge, 
+  RefreshCcw 
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { lazy, Suspense } from 'react';
+
 const MapContainer = lazy(() => import('react-leaflet').then((mod) => ({ default: mod.MapContainer })));
 import { TileLayer, useMap, Polyline } from 'react-leaflet';
 import type { TileLayerProps } from 'react-leaflet';
