@@ -156,30 +156,34 @@ All colors MUST be HSL.
   
   /* Traffic Status Badges */
   .traffic-status-green {
-    @apply bg-[hsl(148,75%,66%)] text-[hsl(223,60%,12%)];
+    background-color: hsl(148 75% 66%);
+    color: hsl(223 60% 12%);
   }
   
   .traffic-status-yellow {
-    @apply bg-[hsl(50,100%,52%)] text-[hsl(223,60%,12%)];
+    background-color: hsl(50 100% 52%);
+    color: hsl(223 60% 12%);
   }
   
   .traffic-status-red {
-    @apply bg-[hsl(0,100%,61%)] text-white;
+    background-color: hsl(0 100% 61%);
+    color: white;
   }
   
   /* Card Styles */
   .card-gradient {
-    @apply bg-gradient-to-br from-[hsl(223,60%,12%)] to-[hsl(225,33%,20%)];
+    background: linear-gradient(to bottom right, hsl(223 60% 12%), hsl(225 33% 20%));
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
 
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-size: 18px;
     line-height: 1.65;
   }
