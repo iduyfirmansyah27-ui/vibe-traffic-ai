@@ -281,31 +281,31 @@ const TrafficMap = ({
       )}
 
       {/* Enhanced Legend */}
-      <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm p-3 rounded-xl border border-border/50 text-xs space-y-2 shadow-lg">
-        <h4 className="font-semibold text-sm mb-1 flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <div className="absolute bottom-4 left-4 bg-[#0f172a]/80 backdrop-blur-sm p-3 rounded-xl border border-[#1e293b] text-xs space-y-2 shadow-lg">
+        <h4 className="font-semibold text-sm mb-1 flex items-center gap-2 text-[#e2e8f0]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#60a5fa]" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             <path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          Traffic Status
+          <span className="text-[#e2e8f0]">Traffic Status</span>
         </h4>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-[#FF4C4C] animate-pulse"></div>
-          <span className="font-medium">Heavy Traffic</span>
-          <span className="ml-auto text-muted-foreground">Slow</span>
+        <div className="flex items-center gap-2 text-[#cbd5e1]">
+          <div className="w-4 h-4 rounded-full bg-[#f87171] animate-pulse"></div>
+          <span className="font-medium text-[#e2e8f0]">Heavy Traffic</span>
+          <span className="ml-auto text-[#94a3b8]">Slow</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-[#FFB800]"></div>
-          <span className="font-medium">Moderate</span>
-          <span className="ml-auto text-muted-foreground">Normal</span>
+        <div className="flex items-center gap-2 text-[#cbd5e1]">
+          <div className="w-4 h-4 rounded-full bg-[#fbbf24]"></div>
+          <span className="font-medium text-[#e2e8f0]">Moderate</span>
+          <span className="ml-auto text-[#94a3b8]">Normal</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-[#5BE595]"></div>
-          <span className="font-medium">Clear</span>
-          <span className="ml-auto text-muted-foreground">Fast</span>
+        <div className="flex items-center gap-2 text-[#cbd5e1]">
+          <div className="w-4 h-4 rounded-full bg-[#4ade80]"></div>
+          <span className="font-medium text-[#e2e8f0]">Clear</span>
+          <span className="ml-auto text-[#94a3b8]">Fast</span>
         </div>
-        <div className="pt-2 mt-2 border-t border-border/50 text-xs text-muted-foreground">
-          Updated: Just now
+        <div className="pt-2 mt-2 border-t border-[#1e293b] text-xs text-[#94a3b8]">
+          Diperbarui: Baru saja
         </div>
       </div>
     </div>
