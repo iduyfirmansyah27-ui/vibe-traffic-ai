@@ -362,26 +362,6 @@ const RoutePlanner = () => {
 
   // State variables are already declared at the top of the component
 
-  // Currency formatter helper
-  const currency = new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  });
-
-  // Function to estimate costs
-  const estimateCosts = (distance: number, vehicleType: string): { fuelCost: number; tollCost: number; totalCost: number } => {
-    const fuelEfficiency = vehicleType === 'car' ? efficiencyCar : efficiencyMoto;
-    const fuelCost = (distance / 1000) * (fuelPrice / fuelEfficiency);
-    const tollCost = useToll ? (distance / 1000) * tollRatePerKm : 0;
-    
-    return {
-      fuelCost,
-      tollCost,
-      totalCost: fuelCost + tollCost
-    };
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <Header 
@@ -1085,11 +1065,11 @@ const RoutePlanner = () => {
                     </Card>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };
