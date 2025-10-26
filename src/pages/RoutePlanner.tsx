@@ -6,7 +6,30 @@ import { Input } from '@/components/ui/input';
 import { MapPin, Navigation, Car, Bike, Clock, TrendingUp, AlertTriangle, CornerDownLeft, CornerDownRight, Flag, MoveRight, GitMerge, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
+import type { MapContainerProps, TileLayerProps, MapContainer as LeafletMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+declare module 'leaflet' {
+  interface PathOptions {
+    color?: string;
+    weight?: number;
+    opacity?: number;
+    dashArray?: string;
+    dashOffset?: string;
+    fill?: boolean;
+    fillColor?: string;
+    fillOpacity?: number;
+    fillRule?: 'nonzero' | 'evenodd' | 'inherit';
+    stroke?: boolean;
+    lineCap?: 'butt' | 'round' | 'square' | 'inherit';
+    lineJoin?: 'miter' | 'round' | 'bevel' | 'inherit';
+    clickable?: boolean;
+    pointerEvents?: string;
+    className?: string;
+  }
+}
 import { geocode, reverseGeocode } from '@/lib/geocoding';
 import { track } from '@/lib/analytics';
 import { getRoutesOSRM } from '@/lib/routing';
@@ -337,7 +360,10 @@ const RoutePlanner = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Header 
+        onToggleTheme={() => setTileTheme(prev => prev === 'light' ? 'dark' : 'light')} 
+        isDarkMode={tileTheme === 'dark'} 
+      />
       
       <main className="container mx-auto px-4 py-10">
         <div className="mb-8">
@@ -649,7 +675,26 @@ const RoutePlanner = () => {
                     <span>Tujuan</span>
                   </div>
                 </div>
-                <MapContainer center={[-6.2, 106.816]} zoom={mapZoom} scrollWheelZoom zoomControl={false} attributionControl={false} className="h-full w-full">
+                <div className="h-full w-full relative">
+                  {/* MapContainer with proper typing */}
+                  {(() => {
+                    const mapContainerProps: MapContainerProps = {
+                      center: [ -6.2, 106.816 ] as [number, number],
+                      zoom: mapZoom,
+                      style: { height: '100%', width: '100%' },
+                      zoomControl: false,
+                      attributionControl: false
+                    } as const;
+                    
+                    return (
+                      <MapContainer {...mapContainerProps}>
+                  
+                    {/* Disable default controls */}
+                    <div className="leaflet-top leaflet-right">
+                      <div className="leaflet-control-container">
+                        <div className="leaflet-top leaflet-right"></div>
+                      </div>
+                    </div>
                   {/* Ensure tiles reflow when layout changes */}
                   <InvalidateSize deps={[fullMap, selectedRouteIndex, mapZoom]} />
                   {/* Scale control */}
@@ -667,15 +712,19 @@ const RoutePlanner = () => {
                   })()}
                   {tileTheme === 'light' ? (
                     <TileLayer
-                      attribution='&copy; OpenStreetMap contributors'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                   ) : (
                     <TileLayer
-                      attribution='&copy; OpenStreetMap contributors, &copy; CARTO'
                       url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
                     />
                   )}
+                  <div className="leaflet-control-attribution leaflet-control">
+                    {tileTheme === 'light' 
+                      ? '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, © <a href="https://carto.com/attributions">CARTO</a>'
+                    }
+                  </div>
                   {originCoord && (
                     <>
                       <CircleDot center={originCoord} radius={14} options={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.2, opacity: 0.2, weight: 0 }} />
@@ -718,7 +767,10 @@ const RoutePlanner = () => {
                   <FitBounds geometries={geometries} originCoord={originCoord} destinationCoord={destinationCoord} selectedIndex={selectedRouteIndex} />
                   <FollowMarker coord={navCoord} follow={followMap} />
                   <ZoomController zoom={mapZoom} />
-                </MapContainer>
+                      </MapContainer>
+                    );
+                  })()}
+              </div>
               </div>
               <div className="flex items-center gap-3 p-4 border-t border-border">
                 <Button variant={fullMap ? 'default' : 'secondary'} onClick={() => { setFullMap((v) => !v); track('ui_fullscreen_toggle', { fullMap: !fullMap }); }}>

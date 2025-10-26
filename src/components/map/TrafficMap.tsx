@@ -21,7 +21,7 @@ export const TrafficMap = () => {
   const [activeLayers, setActiveLayers] = useState<LayerType[]>(['traffic', 'incidents']);
   const [incidents, setIncidents] = useState<TrafficIncidentData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Mock data for demonstration
   const mockIncidents: TrafficIncidentData[] = [
