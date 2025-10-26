@@ -50,13 +50,33 @@ try {
   // Write the fixed Vite config
   fs.writeFileSync(viteConfigPath, fixedViteConfig, 'utf8');
   
-  // Install dependencies
-  console.log('Installing dependencies...');
+  // Install required Vite and React dependencies first
+  console.log('Installing required Vite and React dependencies...');
+  const requiredDeps = [
+    'vite',
+    '@vitejs/plugin-react',
+    'react',
+    'react-dom',
+    'typescript',
+    '@types/node',
+    '@types/react',
+    '@types/react-dom'
+  ].join(' ');
+  
+  execSync(`npm install --no-package-lock --no-save ${requiredDeps}`, { stdio: 'inherit' });
+  
+  // Install all other dependencies
+  console.log('Installing all dependencies...');
   execSync('npm install --production=false', { stdio: 'inherit' });
 
   // Build the project
   console.log('Building the project...');
-  execSync('npm run build', { stdio: 'inherit' });
+  try {
+    execSync('npm run build', { stdio: 'inherit' });
+  } catch (error) {
+    console.error('Build failed with npm run build, trying direct Vite build...');
+    execSync('npx vite build', { stdio: 'inherit' });
+  }
   
   console.log('=== Build completed successfully! ===');
   process.exit(0);

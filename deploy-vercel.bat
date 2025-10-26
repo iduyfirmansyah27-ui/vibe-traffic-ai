@@ -1,20 +1,44 @@
 @echo off
-echo Setting up Vite React TypeScript project for Vercel deployment...
-echo.
+setlocal enabledelayedexpansion
 
-:: Install required dependencies
-echo Step 1: Installing required dependencies...
-call npm install -D @vitejs/plugin-react @types/node
+echo [1/6] 🚀 Starting Vercel deployment process...
 
+:: Check for Node.js and npm
+where node >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo Error installing dependencies. Please check your internet connection and try again.
+    echo ❌ Node.js is not installed. Please install Node.js 16+ and try again.
     pause
-    exit /b %ERRORLEVEL%
+    exit /b 1
 )
 
-:: Create vercel.json
-echo.
-echo Step 2: Creating vercel.json configuration...
+where npm >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo ❌ npm is not installed. Please install Node.js 16+ which includes npm.
+    pause
+    exit /b 1
+)
+
+:: Install Vercel CLI if not installed
+echo [2/6] 🔍 Checking for Vercel CLI...
+vercel --version >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo 📦 Installing Vercel CLI...
+    call npm install -g vercel@latest
+    if %ERRORLEVEL% NEQ 0 (
+        echo ❌ Failed to install Vercel CLI
+        pause
+        exit /b 1
+    )
+)
+
+:: Install project dependencies
+echo [3/6] 🔧 Installing project dependencies...
+call npm install --production=false
+if %ERRORLEVEL% NEQ 0 (
+    echo ❌ Failed to install project dependencies
+    pause
+    exit /b 1
+)
 (
 echo {
 echo   "version": 2,
