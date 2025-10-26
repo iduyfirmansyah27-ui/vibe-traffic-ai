@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    /* Base Options */
     "target": "ES2020",
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
@@ -16,50 +15,21 @@
     "jsxImportSource": "react",
     "allowJs": true,
     "noUnusedLocals": true,
-    "useDefineForClassFields": true,
-
-    /* Paths */
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    },
-
-    /* Type Checking */
-    "strictNullChecks": true,
-    "noImplicitAny": true,
-    "strictBindCallApply": true,
-    "strictFunctionTypes": true,
-    "strictPropertyInitialization": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-
-    /* Emit */
-    "declaration": false,
-    "sourceMap": true,
-
-    /* Interop Constraints */
-    "allowUmdGlobalAccess": true,
-    "moduleSuffixes": [".ts", ".tsx", ".js", ".jsx"],
-    "allowSyntheticDefaultImports": true,
-    "allowImportingTsExtensions": true,
-
-    /* Completeness */
-    "skipDefaultLibCheck": true,
-    "incremental": true
+    }
   },
   "include": [
     "src",
-    "vite.config.ts",
-    "src/**/*.d.ts"
+    "vite.config.ts"
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "build",
-    "**/*.test.ts",
-    "**/*.spec.ts",
-    "**/__tests__/**"
+    "dist"
   ]
 }

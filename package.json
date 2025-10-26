@@ -13,10 +13,11 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "vercel-build": "node vercel-build.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
