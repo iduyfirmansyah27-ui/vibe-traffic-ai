@@ -1,6 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { MoveUpRight } from 'lucide-react';
+
+// Warna-warna untuk traffic map
+const COLORS = {
+  grid: {
+    start: 'rgba(100, 150, 255, 0.05)',
+    end: 'rgba(0, 200, 255, 0.05)'
+  },
+  traffic: {
+    heavy: 'rgba(255, 100, 100, 0.7)',
+    moderate: 'rgba(255, 200, 100, 0.6)',
+    light: 'rgba(100, 220, 220, 0.5)'
+  }
+} as const;
 
 interface TrafficMapProps {
   congestionLevel?: number;
@@ -8,11 +21,12 @@ interface TrafficMapProps {
   showControls?: boolean;
 }
 
-const TrafficMap = ({ 
+// Memoized TrafficMap component for better performance
+const TrafficMapComponent = memo(function TrafficMapComponent({ 
   congestionLevel = 0.65, 
   className,
   showControls = true 
-}: TrafficMapProps) => {
+}: TrafficMapProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -231,6 +245,19 @@ const TrafficMap = ({
     setZoom(prev => Math.min(3, Math.max(0.5, prev + delta)));
   };
 
+  // Memoize the canvas style to prevent unnecessary re-renders
+  const canvasStyle = useMemo(() => ({
+    transform: `scale(${zoom}) translate(${position.x}px, ${position.y}px)`,
+    background: 'radial-gradient(circle at center, hsl(220, 50%, 10%) 0%, hsl(220, 40%, 12%) 100%)',
+  }), [zoom, position.x, position.y]);
+
+  // Gunakan warna yang sesuai dengan tingkat kepadatan lalu lintas
+  const trafficColor = useMemo(() => {
+    if (congestionLevel > 0.7) return COLORS.traffic.heavy;
+    if (congestionLevel > 0.4) return COLORS.traffic.moderate;
+    return COLORS.traffic.light;
+  }, [congestionLevel]);
+
   return (
     <div 
       className={cn(
@@ -246,13 +273,15 @@ const TrafficMap = ({
         setIsHovered(false);
       }}
       onMouseEnter={() => setIsHovered(true)}
+      role="img"
+      aria-label="Peta lalu lintas interaktif"
+      style={{
+        '--traffic-color': trafficColor,
+      } as React.CSSProperties}
     >
       <div 
         className="w-full h-full transition-transform duration-300 ease-out"
-        style={{
-          transform: `scale(${zoom}) translate(${position.x}px, ${position.y}px)`,
-          background: 'radial-gradient(circle at center, hsl(220, 50%, 10%) 0%, hsl(220, 40%, 12%) 100%)',
-        }}
+        style={canvasStyle}
       >
         <canvas
           ref={canvasRef}
@@ -310,6 +339,10 @@ const TrafficMap = ({
       </div>
     </div>
   );
-};
+});
 
-export default TrafficMap;
+// Add display name for better debugging
+TrafficMapComponent.displayName = 'TrafficMap';
+
+// Export the memoized component
+export default TrafficMapComponent;
