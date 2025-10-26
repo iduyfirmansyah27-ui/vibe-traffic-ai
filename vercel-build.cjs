@@ -1,16 +1,12 @@
-import { execSync } from 'child_process';
-import { writeFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-console.log('=== Starting Vercel Build ===');
+console.log('=== Starting Vercel Build (CommonJS) ===');
 
 // Fix Vite config
 console.log('Fixing Vite configuration...');
-const viteConfigPath = join(__dirname, 'vite.config.ts');
+const viteConfigPath = path.join(__dirname, 'vite.config.ts');
 const fixedViteConfig = `import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'url';
@@ -51,7 +47,8 @@ export default defineConfig({
 });`;
 
 try {
-  writeFileSync(viteConfigPath, fixedViteConfig, 'utf8');
+  // Write the fixed Vite config
+  fs.writeFileSync(viteConfigPath, fixedViteConfig, 'utf8');
   
   // Install dependencies
   console.log('Installing dependencies...');
