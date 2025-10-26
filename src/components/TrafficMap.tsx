@@ -31,13 +31,13 @@ const TrafficMap = ({
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
 
-    // Draw network grid with subtle gradient
+    // Draw network grid with more subtle gradient
     const gridGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gridGradient.addColorStop(0, 'rgba(58, 134, 255, 0.1)');
-    gridGradient.addColorStop(1, 'rgba(0, 255, 245, 0.1)');
+    gridGradient.addColorStop(0, 'rgba(100, 150, 255, 0.05)');
+    gridGradient.addColorStop(1, 'rgba(0, 200, 255, 0.05)');
     
     ctx.strokeStyle = gridGradient;
-    ctx.lineWidth = 0.5;
+    ctx.lineWidth = 0.3;
 
     // Vertical lines
     for (let i = 0; i < canvas.width; i += 30) {
@@ -111,23 +111,24 @@ const TrafficMap = ({
           const dotSizeScaled = dotSize * sizeVariation;
           const opacity = 0.2 + 0.8 * (1 - j / dotCount);
           
-          // Draw dot with glow effect
+          // Draw dot with softer glow effect
           ctx.beginPath();
           const dotGradient = ctx.createRadialGradient(
             dotX, dotY, 0,
-            dotX, dotY, dotSizeScaled * 2
+            dotX, dotY, dotSizeScaled * 1.5
           );
-          dotGradient.addColorStop(0, `rgba(58, 134, 255, ${opacity})`);
-          dotGradient.addColorStop(1, 'rgba(0, 255, 245, 0)');
+          // Use a softer blue that matches the theme
+          dotGradient.addColorStop(0, `rgba(100, 180, 255, ${opacity * 0.7})`);
+          dotGradient.addColorStop(1, 'rgba(100, 200, 255, 0)');
           
           ctx.fillStyle = dotGradient;
-          ctx.arc(dotX, dotY, dotSizeScaled * 2, 0, Math.PI * 2);
+          ctx.arc(dotX, dotY, dotSizeScaled * 1.5, 0, Math.PI * 2);
           ctx.fill();
           
-          // Inner dot
+          // Softer inner dot
           ctx.beginPath();
-          ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.8})`;
-          ctx.arc(dotX, dotY, dotSizeScaled * 0.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.4})`;
+          ctx.arc(dotX, dotY, dotSizeScaled * 0.3, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -140,25 +141,63 @@ const TrafficMap = ({
     // Draw congestion hotspot (heatmap effect)
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
+    const maxRadius = Math.max(canvas.width, canvas.height) * 0.6 * zoom;
     
-    // Create gradient for heatmap using the new color scheme
-    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 200 * zoom);
-    gradient.addColorStop(0, 'rgba(255, 76, 76, 0.8)'); // Traffic Red
-    gradient.addColorStop(0.4, 'rgba(255, 214, 10, 0.5)'); // Traffic Yellow
-    gradient.addColorStop(0.7, 'rgba(91, 229, 149, 0.3)'); // Traffic Green
-    gradient.addColorStop(0.9, 'rgba(0, 255, 245, 0.1)'); // Aqua Glow
-    gradient.addColorStop(1, 'rgba(0, 200, 255, 0)');
+    // Enhanced gradient for better traffic visualization
+    const gradient = ctx.createRadialGradient(
+      centerX, centerY, 0, 
+      centerX, centerY, maxRadius
+    );
+    
+    // Softer gradient based on congestion level
+    if (congestionLevel > 0.7) {
+      // Heavy traffic (softer red to orange)
+      gradient.addColorStop(0, 'rgba(255, 100, 100, 0.7)');
+      gradient.addColorStop(0.3, 'rgba(255, 160, 60, 0.5)');
+      gradient.addColorStop(0.6, 'rgba(255, 200, 100, 0.3)');
+      gradient.addColorStop(0.8, 'rgba(120, 220, 160, 0.15)');
+      gradient.addColorStop(1, 'rgba(100, 200, 255, 0.05)');
+    } else if (congestionLevel > 0.4) {
+      // Moderate traffic (softer orange to yellow)
+      gradient.addColorStop(0, 'rgba(255, 180, 60, 0.6)');
+      gradient.addColorStop(0.4, 'rgba(255, 200, 100, 0.4)');
+      gradient.addColorStop(0.7, 'rgba(150, 220, 150, 0.2)');
+      gradient.addColorStop(1, 'rgba(100, 220, 255, 0.05)');
+    } else {
+      // Light traffic (softer green to blue)
+      gradient.addColorStop(0, 'rgba(120, 220, 160, 0.5)');
+      gradient.addColorStop(0.5, 'rgba(100, 220, 220, 0.25)');
+      gradient.addColorStop(0.8, 'rgba(80, 180, 255, 0.1)');
+      gradient.addColorStop(1, 'rgba(70, 170, 255, 0)');
+    }
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw glow effect
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = 'rgba(0, 200, 255, 0.5)';
+    // Softer glow effect based on traffic level
+    const glowColor = congestionLevel > 0.7 
+      ? 'rgba(255, 120, 100, 0.6)'  // Softer red for heavy traffic
+      : congestionLevel > 0.4 
+        ? 'rgba(255, 180, 80, 0.5)' // Softer orange for moderate
+        : 'rgba(120, 220, 200, 0.4)'; // Softer teal for light
+    
+    // More subtle outer glow
+    ctx.shadowBlur = 30 * (0.5 + congestionLevel * 0.5);
+    ctx.shadowColor = glowColor;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, 80, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0, 200, 255, 0.1)';
+    ctx.arc(centerX, centerY, 50 + congestionLevel * 30, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
     ctx.fill();
+    
+    // Softer inner glow
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 20 + congestionLevel * 20, 0, Math.PI * 2);
+    ctx.fillStyle = glowColor.replace('0.6', '0.2').replace('0.5', '0.15').replace('0.4', '0.1');
+    ctx.fill();
+    
+    // Clear shadow after use to prevent affecting other elements
+    ctx.shadowBlur = 0;
   }, [congestionLevel]);
 
   // Handle mouse down for dragging
@@ -212,7 +251,7 @@ const TrafficMap = ({
         className="w-full h-full transition-transform duration-300 ease-out"
         style={{
           transform: `scale(${zoom}) translate(${position.x}px, ${position.y}px)`,
-          background: 'radial-gradient(circle at center, hsl(223, 60%, 8%) 0%, hsl(223, 33%, 10%) 100%)',
+          background: 'radial-gradient(circle at center, hsl(220, 50%, 10%) 0%, hsl(220, 40%, 12%) 100%)',
         }}
       >
         <canvas
@@ -241,19 +280,32 @@ const TrafficMap = ({
         </div>
       )}
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-background/80 backdrop-blur-sm p-3 rounded-lg border border-border/50 text-xs space-y-2">
+      {/* Enhanced Legend */}
+      <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm p-3 rounded-xl border border-border/50 text-xs space-y-2 shadow-lg">
+        <h4 className="font-semibold text-sm mb-1 flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Traffic Status
+        </h4>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[hsl(0,100%,61%)]"></div>
-          <span>Heavy Traffic</span>
+          <div className="w-4 h-4 rounded-full bg-[#FF4C4C] animate-pulse"></div>
+          <span className="font-medium">Heavy Traffic</span>
+          <span className="ml-auto text-muted-foreground">Slow</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[hsl(50,100%,52%)]"></div>
-          <span>Moderate</span>
+          <div className="w-4 h-4 rounded-full bg-[#FFB800]"></div>
+          <span className="font-medium">Moderate</span>
+          <span className="ml-auto text-muted-foreground">Normal</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[hsl(148,75%,66%)]"></div>
-          <span>Clear</span>
+          <div className="w-4 h-4 rounded-full bg-[#5BE595]"></div>
+          <span className="font-medium">Clear</span>
+          <span className="ml-auto text-muted-foreground">Fast</span>
+        </div>
+        <div className="pt-2 mt-2 border-t border-border/50 text-xs text-muted-foreground">
+          Updated: Just now
         </div>
       </div>
     </div>
