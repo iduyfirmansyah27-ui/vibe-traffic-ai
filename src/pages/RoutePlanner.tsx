@@ -651,8 +651,9 @@ const RoutePlanner = () => {
                 })()}
               </div>
             )}
-            <Card className="border-glow bg-card mb-6 overflow-hidden relative rounded-xl">
-              <div className={fullMap ? "h-[calc(100vh-160px)]" : "h-[580px]"}>
+<div className="lg:col-span-2">
+              <Card className="border-glow bg-card mb-6 overflow-hidden relative rounded-xl">
+                <div className={fullMap ? "h-[calc(100vh-160px)]" : "h-[580px]"}>
                 {/* Banner instruksi langkah berikutnya */}
                 {selectedRouteIndex != null && routeSteps[selectedRouteIndex] && routeSteps[selectedRouteIndex][currentStepIdx] && (
                   <div className="absolute z-10 m-2 px-2 py-1 rounded-md bg-black/50 text-foreground text-xs border border-border backdrop-blur">
@@ -887,7 +888,6 @@ const RoutePlanner = () => {
                   </div>
                 </div>
               </Card>
-
               {routes.length === 0 ? (
                 <Card className="p-12 border-glow bg-card text-center">
                   <Navigation className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -1067,9 +1067,9 @@ const RoutePlanner = () => {
                           </div>
                         )}
                       </div>
-                    </Card>
+                    </div>
                   ))}
-                </div>
+                </Card>
               )}
             </div>
           </div>
