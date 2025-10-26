@@ -162,7 +162,7 @@ const Header = ({ onToggleTheme, isDarkMode }: HeaderProps) => {
               })}
             </div>
           </div>
-        )}
+        </div>
       </div>
     </header>
   );
